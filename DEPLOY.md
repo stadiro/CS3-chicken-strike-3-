@@ -143,3 +143,16 @@ sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```
 После этого `./deploy.sh` выполнит сборку быстро и без сбоев.
+
+---
+
+## Решение возможных проблем (Troubleshooting)
+
+### Ошибка `sh: 1: tsc: Permission denied`
+Такая ошибка возникает, если папка проекта или `node_modules` были ранее скопированы от другого пользователя или без флага исполнения `+x` на бинарниках:
+```bash
+sudo chown -R $USER:$USER .
+chmod -R +x node_modules/.bin
+./deploy.sh
+```
+В актуальной версии `deploy.sh` эти права выставляются автоматически.

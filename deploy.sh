@@ -117,14 +117,29 @@ else
 fi
 
 # 6. Установка зависимостей проекта (npm)
-log_info "Установка зависимостей проекта (npm install)..."
-# Выполняем от имени реального пользователя для корректных прав на node_modules
+log_info "Проверка прав доступа и установка зависимостей проекта (npm install)..."
+# Выравниваем права на директорию проекта перед установкой
+chown -R "${REAL_USER}:${REAL_GROUP}" "$APP_DIR"
+
+# Выполняем npm install от имени реального пользователя для корректных прав
 if [ "$REAL_USER" != "root" ]; then
   sudo -u "$REAL_USER" npm install --no-audit --prefer-offline 2>&1 | tail -n 10
 else
   npm install --no-audit --prefer-offline 2>&1 | tail -n 10
 fi
-log_success "Зависимости npm установлены."
+
+# Устраняем ошибку "Permission denied" для tsc, vite, esbuild и других CLI-утилит:
+# выставляем права на выполнение (+x) для всех бинарников и ссылок в node_modules/.bin
+chown -R "${REAL_USER}:${REAL_GROUP}" "$APP_DIR"
+if [ -d "$APP_DIR/node_modules" ]; then
+  chmod -R u+x "$APP_DIR/node_modules/.bin" 2>/dev/null || true
+  chmod -R +x "$APP_DIR/node_modules/.bin" 2>/dev/null || true
+  find "$APP_DIR/node_modules" -path "*/bin/*" -type f -exec chmod +x {} + 2>/dev/null || true
+  find "$APP_DIR/node_modules" -name "tsc" -exec chmod +x {} + 2>/dev/null || true
+  find "$APP_DIR/node_modules" -name "vite" -exec chmod +x {} + 2>/dev/null || true
+  find "$APP_DIR/node_modules" -name "esbuild" -exec chmod +x {} + 2>/dev/null || true
+fi
+log_success "Зависимости npm установлены, права на запуск бинарников (+x) настроены."
 
 # 7. Сборка клиента и сервера (production build)
 log_info "Сборка проекта (npm run build: typecheck, vite client, esbuild server)..."
