@@ -1319,11 +1319,11 @@ function buildDust2Arena(): ArenaMap {
   // Машина (B Car) & Нычка (Closet) to the left of B Tunnel exit
   addBox('b-car-body', vec3(-31.0, 1.2, -15.8), vec3(-28.4, 2.4, -12.2), DUST2.car, 'crate');
   addBox('b-closet-crate', vec3(-31.0, 1.2, -18.2), vec3(-29.4, 2.45, -16.6), DUST2.crate, 'crate');
-  // Танцпол low wooden divider wall
+  // Танцпол low wooden divider wall (высота 0.55 м для легкого перепрыгивания на бегу)
   addBox(
     'b-dancefloor-fence',
     vec3(-25.8, 1.2, -24.5),
-    vec3(-25.3, 2.15, -17.0),
+    vec3(-25.3, 1.75, -17.0),
     DUST2.door,
     'wall',
   );
@@ -1355,11 +1355,15 @@ function buildDust2Arena(): ArenaMap {
   );
   addBox('b-b3-crate', vec3(-21.8, 1.2, -23.4), vec3(-19.8, 2.55, -21.4), DUST2.crateTarp, 'crate');
 
-  // East wall of Bombsite B with staggered diagonal ДВЕРИ B and raised/shifted ОКНО B (z: -26.8 .. -23.8, y = 2.85)
+  // East wall of Bombsite B with angled 45-deg ДВЕРИ B and raised/shifted ОКНО B (z: -26.8 .. -23.8, y = 2.85)
   addBox('b-east-wall-s', vec3(-16.3, 1.2, -13.6), vec3(-15.5, 7.6, -10), DUST2.wall, 'wall');
   addBox('b-doors-lintel', vec3(-16.3, 3.8, -16.8), vec3(-15.5, 7.6, -13.6), DUST2.arch, 'wall');
-  addBox('b-door-leaf-n', vec3(-15.8, 1.2, -16.8), vec3(-15.4, 3.8, -14.9), DUST2.door, 'crate');
-  addBox('b-door-leaf-s', vec3(-17.5, 1.2, -15.5), vec3(-17.1, 3.8, -13.6), DUST2.door, 'crate');
+  // Поменяны местами: северная створка стоит дальше со стороны КТ (глубже в Б: x = -17.5..-17.1),
+  // полностью блокируя обзор со стороны КТ на плент Б и давая обзор в одну сторону (с сайта Б на выход КТ)
+  addBox('b-door-leaf-n', vec3(-17.5, 1.2, -16.8), vec3(-17.1, 3.8, -14.9), DUST2.door, 'crate');
+  // Южная створка стоит ближе со стороны КТ (на x = -15.8..-15.4),
+  // направляя обзор со стороны КТ строго на выход из темки на Б
+  addBox('b-door-leaf-s', vec3(-15.8, 1.2, -15.5), vec3(-15.4, 3.8, -13.6), DUST2.door, 'crate');
   addBox('b-east-wall-mid', vec3(-16.3, 1.2, -23.8), vec3(-15.5, 7.6, -16.8), DUST2.wall, 'wall');
   addBox(
     'b-window-sill',

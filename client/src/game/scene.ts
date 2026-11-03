@@ -264,6 +264,33 @@ function freezeStaticGroup(group: Group): Group {
   return group;
 }
 
+interface AngledDoorDef {
+  x0: number;
+  z0: number;
+  x1: number;
+  z1: number;
+}
+
+const DUST2_ANGLED_DOORS: Record<string, AngledDoorDef> = {
+  // Сайт Б:
+  // Северная створка (дальняя от КТ): распахнута вглубь сайта Б под 45°, закрывает обзор на плент Б
+  'b-door-leaf-n': { x0: -15.9, z0: -16.8, x1: -17.3, z1: -15.4 },
+  // Южная створка (ближняя к КТ): под 45° наружу, направляет обзор только на выход с темки на Б
+  'b-door-leaf-s': { x0: -15.9, z0: -13.6, x1: -14.9, z1: -14.6 },
+
+  // Выход с КТ на мид: двери под 45 градусов смотрят на шорт
+  'mid-door-leaf-w': { x0: -2.6, z0: -1.7, x1: -1.4, z1: -0.5 },
+  'mid-door-leaf-e': { x0: 0.5, z0: -1.7, x1: 0.9, z1: -1.3 },
+
+  // Вход в банку со стороны Т: двери под 45 градусов смотрят на мид
+  'banka-s-leaf-w': { x0: 16.0, z0: 11.6, x1: 15.0, z1: 12.6 },
+  'banka-s-leaf-e': { x0: 19.2, z0: 11.6, x1: 18.0, z1: 12.8 },
+
+  // Выход с банки в лонг: двери под 45 градусов смотрят в лонг
+  'banka-n-leaf-w': { x0: 16.0, z0: 2.8, x1: 17.1, z1: 1.7 },
+  'banka-n-leaf-e': { x0: 19.2, z0: 2.8, x1: 20.1, z1: 1.9 },
+};
+
 function makeArenaGeometry(map: ArenaMap, maxAnisotropy = 4): Group {
   const group = new Group();
   const isDust2 = map.id === 'de_dust2';
@@ -342,43 +369,60 @@ function makeArenaGeometry(map: ArenaMap, maxAnisotropy = 4): Group {
       }
     }
 
-    const size = {
-      x: renderMaxX - renderMinX,
-      y: renderMaxY - renderMinY,
-      z: renderMaxZ - renderMinZ,
-    };
-    const cx = (renderMinX + renderMaxX) / 2;
-    const cy = (renderMinY + renderMaxY) / 2;
-    const cz = (renderMinZ + renderMaxZ) / 2;
+    let geometry: BoxGeometry;
+    let cx = (renderMinX + renderMaxX) / 2;
+    let cy = (renderMinY + renderMaxY) / 2;
+    let cz = (renderMinZ + renderMaxZ) / 2;
 
-    const geometry = new BoxGeometry(size.x, size.y, size.z);
-    if (slopeAxis !== null) {
-      const pos = geometry.attributes.position;
-      if (pos !== undefined) {
-        for (let i = 0; i < pos.count; i += 1) {
-          const vy = pos.getY(i);
-          if (vy > 0) {
-            const worldCoord = slopeAxis === 'z' ? cz + pos.getZ(i) : cx + pos.getX(i);
-            const t = Math.max(
-              0,
-              Math.min(1, (worldCoord - slopeStart) / (slopeEnd - slopeStart || 1)),
-            );
-            const targetWorldY = slopeYStart + t * (slopeYEnd - slopeYStart);
-            pos.setY(i, targetWorldY - cy);
-          }
-        }
-        pos.needsUpdate = true;
-        geometry.computeVertexNormals();
+    const angledDoor = isDust2 ? DUST2_ANGLED_DOORS[box.id] : undefined;
+    if (angledDoor !== undefined) {
+      const len = Math.hypot(angledDoor.x1 - angledDoor.x0, angledDoor.z1 - angledDoor.z0);
+      const height = renderMaxY - renderMinY;
+      const thickness = 0.12;
+      const yaw = Math.atan2(angledDoor.x1 - angledDoor.x0, angledDoor.z1 - angledDoor.z0);
+      geometry = new BoxGeometry(thickness, height, len);
+      geometry.rotateY(yaw);
+      cx = (angledDoor.x0 + angledDoor.x1) / 2;
+      cy = (renderMinY + renderMaxY) / 2;
+      cz = (angledDoor.z0 + angledDoor.z1) / 2;
+      if (isDust2) {
+        scaleBoxUVsWorldSpace(geometry, thickness, height, len, 1.8);
       }
-    }
-    if (isDust2) {
-      const tileMeters =
-        box.kind === 'crate'
-          ? 1.8
-          : box.kind === 'floor' || box.kind === 'platform' || box.kind === 'ramp'
-            ? 3.6
-            : 3.2;
-      scaleBoxUVsWorldSpace(geometry, size.x, size.y, size.z, tileMeters);
+    } else {
+      const size = {
+        x: renderMaxX - renderMinX,
+        y: renderMaxY - renderMinY,
+        z: renderMaxZ - renderMinZ,
+      };
+      geometry = new BoxGeometry(size.x, size.y, size.z);
+      if (slopeAxis !== null) {
+        const pos = geometry.attributes.position;
+        if (pos !== undefined) {
+          for (let i = 0; i < pos.count; i += 1) {
+            const vy = pos.getY(i);
+            if (vy > 0) {
+              const worldCoord = slopeAxis === 'z' ? cz + pos.getZ(i) : cx + pos.getX(i);
+              const t = Math.max(
+                0,
+                Math.min(1, (worldCoord - slopeStart) / (slopeEnd - slopeStart || 1)),
+              );
+              const targetWorldY = slopeYStart + t * (slopeYEnd - slopeYStart);
+              pos.setY(i, targetWorldY - cy);
+            }
+          }
+          pos.needsUpdate = true;
+          geometry.computeVertexNormals();
+        }
+      }
+      if (isDust2) {
+        const tileMeters =
+          box.kind === 'crate'
+            ? 1.8
+            : box.kind === 'floor' || box.kind === 'platform' || box.kind === 'ramp'
+              ? 3.6
+              : 3.2;
+        scaleBoxUVsWorldSpace(geometry, size.x, size.y, size.z, tileMeters);
+      }
     }
     const materialKey = `${box.kind}:${box.color}`;
     let material = materials.get(materialKey);
