@@ -1,6 +1,6 @@
 import { MOVEMENT } from '../../shared/config';
 import { clamp, normalizeAngle, normalize, type Vec3 } from '../../shared/math';
-import type { ArenaMap, MapBox } from '../../shared/map';
+import { DUST2_ANGLED_DOORS, type ArenaMap, type MapBox } from '../../shared/map';
 import type { InputFrame } from '../../shared/protocol';
 import { getWeapon } from '../../shared/weapons';
 import { getActiveWeapon } from './inventory';
@@ -51,9 +51,53 @@ function boxAabb(box: MapBox): Aabb {
   return { min: box.min, max: box.max };
 }
 
+function circleIntersectsSegment(
+  px: number,
+  pz: number,
+  radius: number,
+  x0: number,
+  z0: number,
+  x1: number,
+  z1: number,
+  thickness: number,
+): boolean {
+  const dx = x1 - x0;
+  const dz = z1 - z0;
+  const lenSq = dx * dx + dz * dz;
+  if (lenSq < 1e-6) {
+    const dSq = (px - x0) * (px - x0) + (pz - z0) * (pz - z0);
+    const maxR = radius + thickness / 2 - EPSILON;
+    return dSq < maxR * maxR;
+  }
+  const t = Math.max(0, Math.min(1, ((px - x0) * dx + (pz - z0) * dz) / lenSq));
+  const closeX = x0 + t * dx;
+  const closeZ = z0 + t * dz;
+  const distSq = (px - closeX) * (px - closeX) + (pz - closeZ) * (pz - closeZ);
+  const maxDist = radius + thickness / 2 - EPSILON;
+  return distSq < maxDist * maxDist;
+}
+
 function overlappingBoxesAtHeight(player: PlayerState, map: ArenaMap, height: number): MapBox[] {
   const aabb = playerAabb(player, height);
-  return map.boxes.filter((box) => box.kind !== 'ladder' && aabbOverlaps(aabb, boxAabb(box)));
+  return map.boxes.filter((box) => {
+    if (box.kind === 'ladder' || !aabbOverlaps(aabb, boxAabb(box))) {
+      return false;
+    }
+    const angled = map.id === 'de_dust2' ? DUST2_ANGLED_DOORS[box.id] : undefined;
+    if (angled !== undefined) {
+      return circleIntersectsSegment(
+        player.position.x,
+        player.position.z,
+        MOVEMENT.radius,
+        angled.x0,
+        angled.z0,
+        angled.x1,
+        angled.z1,
+        angled.thickness,
+      );
+    }
+    return true;
+  });
 }
 
 export function overlappingBoxes(player: PlayerState, map: ArenaMap): MapBox[] {
