@@ -270,4 +270,93 @@ describe('player physics', () => {
     expect(Math.abs(knifePlayer.position.z)).toBeGreaterThan(Math.abs(pistolPlayer.position.z));
     expect(Math.abs(pistolPlayer.position.z)).toBeGreaterThan(Math.abs(riflePlayer.position.z));
   });
+
+  it('allows players to walk through Dust2 doors without being teleported', async () => {
+    const { DE_DUST2_MAP } = await import('../shared/map');
+
+    // 1. Walk from CT landing towards B site through B doors:
+    const bToCt = makePlayer({ position: vec3(-13.5, 1.2, -15.2) });
+    for (let i = 1; i <= 30; i++) {
+      simulatePlayer(
+        bToCt,
+        makeInput({ forward: 1, yaw: Math.PI / 2, seq: i }), // moves towards -X
+        1 / 30,
+        DE_DUST2_MAP,
+        1_000 + i * 33,
+      );
+    }
+    expect(bToCt.position.y).toBeCloseTo(1.2, 1);
+    expect(bToCt.position.x).toBeLessThan(-17.0);
+
+    // 2. Walk from B site back to CT landing through B doors:
+    const ctToB = makePlayer({ position: vec3(-18.0, 1.2, -15.1) });
+    for (let i = 1; i <= 30; i++) {
+      simulatePlayer(
+        ctToB,
+        makeInput({ forward: 1, yaw: -Math.PI / 2, seq: i }), // moves towards +X
+        1 / 30,
+        DE_DUST2_MAP,
+        1_000 + i * 33,
+      );
+    }
+    expect(ctToB.position.y).toBeCloseTo(1.2, 1);
+    expect(ctToB.position.x).toBeGreaterThan(-14.5);
+
+    // 3. Walk through Mid doors:
+    const midPlayer = makePlayer({ position: vec3(-1.7, 0.0, -2.5) });
+    const yawMid = Math.atan2(-1.65, -1.6);
+    for (let i = 1; i <= 30; i++) {
+      simulatePlayer(
+        midPlayer,
+        makeInput({ forward: 1, yaw: yawMid, seq: i }),
+        1 / 30,
+        DE_DUST2_MAP,
+        1_000 + i * 33,
+      );
+    }
+    expect(midPlayer.position.y).toBeCloseTo(0.0, 1);
+    expect(midPlayer.position.z).toBeGreaterThan(-1.0);
+
+    // 4. Walk through Banka South doors:
+    const bankaSouth = makePlayer({ position: vec3(17.6, 1.6, 14.0) });
+    for (let i = 1; i <= 45; i++) {
+      simulatePlayer(
+        bankaSouth,
+        makeInput({ forward: 1, yaw: 0, seq: i }),
+        1 / 30,
+        DE_DUST2_MAP,
+        1_000 + i * 33,
+      );
+    }
+    expect(bankaSouth.position.y).toBeCloseTo(1.6, 1);
+    expect(bankaSouth.position.z).toBeLessThan(8.0);
+
+    // 5. Walk through Banka North doors:
+    const bankaNorth = makePlayer({ position: vec3(17.6, 1.6, 5.0) });
+    for (let i = 1; i <= 45; i++) {
+      simulatePlayer(
+        bankaNorth,
+        makeInput({ forward: 1, yaw: 0, seq: i }),
+        1 / 30,
+        DE_DUST2_MAP,
+        1_000 + i * 33,
+      );
+    }
+    expect(bankaNorth.position.y).toBeCloseTo(1.6, 1);
+    expect(bankaNorth.position.z).toBeLessThan(0.0);
+
+    // 6. Running into door and jumping should NOT teleport above the map (e.g. y >= 7) or below map (y < 0)
+    const jumper = makePlayer({ position: vec3(-16.0, 1.2, -16.17) });
+    for (let i = 1; i <= 30; i++) {
+      simulatePlayer(
+        jumper,
+        makeInput({ forward: 1, jump: true, yaw: Math.PI / 2, strafe: 0.5, seq: i }),
+        1 / 30,
+        DE_DUST2_MAP,
+        1_000 + i * 33,
+      );
+      expect(jumper.position.y).toBeGreaterThanOrEqual(1.15);
+      expect(jumper.position.y).toBeLessThan(3.5);
+    }
+  });
 });

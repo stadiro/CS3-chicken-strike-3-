@@ -108,7 +108,7 @@ export function isSupported(player: PlayerState, map: ArenaMap): boolean {
   const radius = MOVEMENT.radius;
   const feet = player.position.y;
   for (const box of map.boxes) {
-    if (box.kind === 'ladder') {
+    if (box.kind === 'ladder' || (map.id === 'de_dust2' && DUST2_ANGLED_DOORS[box.id] !== undefined)) {
       continue;
     }
     if (player.position.x + radius <= box.min.x + EPSILON) {
@@ -241,6 +241,9 @@ function moveHorizontal(
 
   if (player.grounded) {
     for (const box of collisions) {
+      if (map.id === 'de_dust2' && DUST2_ANGLED_DOORS[box.id] !== undefined) {
+        continue;
+      }
       const rise = box.max.y - player.position.y;
       if (rise > EPSILON && rise <= MOVEMENT.stepHeight + EPSILON) {
         const oldY = player.position.y;
@@ -256,7 +259,12 @@ function moveHorizontal(
   }
 
   let clamped = target;
+  let hitAabb = false;
   for (const box of collisions) {
+    if (map.id === 'de_dust2' && DUST2_ANGLED_DOORS[box.id] !== undefined) {
+      continue;
+    }
+    hitAabb = true;
     if (axis === 'x') {
       if (amount > 0) {
         clamped = Math.min(clamped, box.min.x - MOVEMENT.radius - 0.001);
@@ -270,9 +278,129 @@ function moveHorizontal(
     }
   }
 
-  player.position[axis] = clamped;
-  player.velocity[axis] = 0;
+  if (hitAabb) {
+    player.position[axis] = clamped;
+    player.velocity[axis] = 0;
+  }
   return false;
+}
+
+function resolveAngledDoors(player: PlayerState, map: ArenaMap): boolean {
+  if (map.id !== 'de_dust2') {
+    return false;
+  }
+  const height = playerHeight(player);
+  const playerBottom = player.position.y;
+  const playerTop = player.position.y + height;
+  let resolvedAny = false;
+
+  for (let pass = 0; pass < 3; pass += 1) {
+    let collidedThisPass = false;
+
+    for (const box of map.boxes) {
+      const door = DUST2_ANGLED_DOORS[box.id];
+      if (door === undefined) {
+        continue;
+      }
+
+      if (playerBottom >= box.max.y - EPSILON || playerTop <= box.min.y + EPSILON) {
+        continue;
+      }
+
+      const dx = door.x1 - door.x0;
+      const dz = door.z1 - door.z0;
+      const lenSq = dx * dx + dz * dz;
+      if (lenSq < 1e-8) {
+        continue;
+      }
+
+      const px = player.position.x;
+      const pz = player.position.z;
+      const u = ((px - door.x0) * dx + (pz - door.z0) * dz) / lenSq;
+      const t = Math.max(0, Math.min(1, u));
+      const closeX = door.x0 + t * dx;
+      const closeZ = door.z0 + t * dz;
+
+      const sepX = px - closeX;
+      const sepZ = pz - closeZ;
+      const distSq = sepX * sepX + sepZ * sepZ;
+      const minDist = MOVEMENT.radius + door.thickness / 2;
+
+      if (distSq < minDist * minDist) {
+        collidedThisPass = true;
+        resolvedAny = true;
+        const dist = Math.sqrt(distSq);
+        let nx: number;
+        let nz: number;
+        if (dist > 1e-6) {
+          nx = sepX / dist;
+          nz = sepZ / dist;
+        } else {
+          const len = Math.sqrt(lenSq);
+          nx = -dz / len;
+          nz = dx / len;
+        }
+
+        const penetration = minDist - dist;
+        const push = penetration + 0.001;
+        player.position.x += nx * push;
+        player.position.z += nz * push;
+
+        const normalVel = player.velocity.x * nx + player.velocity.z * nz;
+        if (normalVel < 0) {
+          player.velocity.x -= normalVel * nx;
+          player.velocity.z -= normalVel * nz;
+        }
+      }
+    }
+
+    if (!collidedThisPass) {
+      break;
+    }
+  }
+
+  return resolvedAny;
+}
+
+function clampToAabbWalls(player: PlayerState, map: ArenaMap): void {
+  const height = playerHeight(player);
+  const aabb = playerAabb(player, height);
+  for (const box of map.boxes) {
+    if (box.kind === 'ladder' || (map.id === 'de_dust2' && DUST2_ANGLED_DOORS[box.id] !== undefined)) {
+      continue;
+    }
+    if (player.position.y >= box.max.y - EPSILON || player.position.y + height <= box.min.y + EPSILON) {
+      continue;
+    }
+    if (!aabbOverlaps(aabb, boxAabb(box))) {
+      continue;
+    }
+
+    const pushLeft = box.min.x - MOVEMENT.radius - player.position.x;
+    const pushRight = box.max.x + MOVEMENT.radius - player.position.x;
+    const pushDown = box.min.z - MOVEMENT.radius - player.position.z;
+    const pushUp = box.max.z + MOVEMENT.radius - player.position.z;
+
+    const absLeft = Math.abs(pushLeft);
+    const absRight = Math.abs(pushRight);
+    const absDown = Math.abs(pushDown);
+    const absUp = Math.abs(pushUp);
+
+    const minPush = Math.min(absLeft, absRight, absDown, absUp);
+    if (minPush === absLeft) {
+      player.position.x = box.min.x - MOVEMENT.radius - 0.001;
+      if (player.velocity.x > 0) player.velocity.x = 0;
+    } else if (minPush === absRight) {
+      player.position.x = box.max.x + MOVEMENT.radius + 0.001;
+      if (player.velocity.x < 0) player.velocity.x = 0;
+    } else if (minPush === absDown) {
+      player.position.z = box.min.z - MOVEMENT.radius - 0.001;
+      if (player.velocity.z > 0) player.velocity.z = 0;
+    } else {
+      player.position.z = box.max.z + MOVEMENT.radius + 0.001;
+      if (player.velocity.z < 0) player.velocity.z = 0;
+    }
+  }
 }
 
 function moveVertical(player: PlayerState, amount: number, map: ArenaMap): boolean {
@@ -280,6 +408,7 @@ function moveVertical(player: PlayerState, amount: number, map: ArenaMap): boole
     return false;
   }
 
+  const prevY = player.position.y;
   player.position.y += amount;
   const collisions = overlappingBoxes(player, map);
   if (collisions.length === 0) {
@@ -289,22 +418,38 @@ function moveVertical(player: PlayerState, amount: number, map: ArenaMap): boole
   if (amount <= 0) {
     let top = Number.NEGATIVE_INFINITY;
     for (const box of collisions) {
-      top = Math.max(top, box.max.y);
+      if (map.id === 'de_dust2' && DUST2_ANGLED_DOORS[box.id] !== undefined) {
+        continue;
+      }
+      if (prevY >= box.max.y - Math.abs(amount) - 0.05) {
+        top = Math.max(top, box.max.y);
+      }
     }
     if (top > Number.NEGATIVE_INFINITY) {
       player.position.y = top;
       player.velocity.y = 0;
       return true;
     }
+    player.position.y = prevY;
+    player.velocity.y = 0;
     return false;
   }
 
   let bottom = Number.POSITIVE_INFINITY;
+  const height = playerHeight(player);
   for (const box of collisions) {
-    bottom = Math.min(bottom, box.min.y);
+    if (map.id === 'de_dust2' && DUST2_ANGLED_DOORS[box.id] !== undefined) {
+      continue;
+    }
+    if (prevY + height <= box.min.y + amount + 0.05) {
+      bottom = Math.min(bottom, box.min.y);
+    }
   }
   if (bottom < Number.POSITIVE_INFINITY) {
-    player.position.y = bottom - playerHeight(player) - 0.001;
+    player.position.y = bottom - height - 0.001;
+    player.velocity.y = 0;
+  } else {
+    player.position.y = prevY;
     player.velocity.y = 0;
   }
   return false;
@@ -398,6 +543,13 @@ export function simulatePlayer(
 
   const steppedX = moveHorizontal(player, 'x', player.velocity.x * dt, map);
   const steppedZ = moveHorizontal(player, 'z', player.velocity.z * dt, map);
+  for (let iter = 0; iter < 2; iter += 1) {
+    const doorPushed = resolveAngledDoors(player, map);
+    clampToAabbWalls(player, map);
+    if (!doorPushed) {
+      break;
+    }
+  }
   const stepped = steppedX || steppedZ;
   const landed = moveVertical(player, player.velocity.y * dt, map);
   const fallSpeed = landed && !wasGrounded ? Math.max(player.fallVelocity, impactSpeed) : 0;
