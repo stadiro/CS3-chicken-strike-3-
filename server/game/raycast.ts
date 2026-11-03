@@ -1,6 +1,6 @@
 import { MOVEMENT, PLAYER as PLAYER_CONFIG } from '../../shared/config';
 import { add, clamp, normalize, scale, type Vec3 } from '../../shared/math';
-import type { ArenaMap } from '../../shared/map';
+import { DUST2_ANGLED_DOORS, type AngledDoorDef, type ArenaMap } from '../../shared/map';
 import type { HitZone } from '../../shared/protocol';
 import type { WeaponDefinition } from '../../shared/weapons';
 import { sampleHistory } from './history';
@@ -80,6 +80,56 @@ export function rayAabb(
   };
 }
 
+function rayAngledDoor(
+  origin: Vec3,
+  direction: Vec3,
+  door: AngledDoorDef,
+  minY: number,
+  maxY: number,
+  maxDistance: number,
+): RayAabbHit | null {
+  const len = Math.hypot(door.x1 - door.x0, door.z1 - door.z0);
+  if (len < 1e-4) {
+    return null;
+  }
+  const cx = (door.x0 + door.x1) / 2;
+  const cy = (minY + maxY) / 2;
+  const cz = (door.z0 + door.z1) / 2;
+  const cos = (door.z1 - door.z0) / len;
+  const sin = (door.x1 - door.x0) / len;
+
+  const ox = origin.x - cx;
+  const oy = origin.y - cy;
+  const oz = origin.z - cz;
+  const localOrigin: Vec3 = {
+    x: ox * cos - oz * sin,
+    y: oy,
+    z: ox * sin + oz * cos,
+  };
+  const localDir: Vec3 = {
+    x: direction.x * cos - direction.z * sin,
+    y: direction.y,
+    z: direction.x * sin + direction.z * cos,
+  };
+
+  const halfT = door.thickness / 2;
+  const halfH = (maxY - minY) / 2;
+  const halfL = len / 2;
+  const localBox: AabbLike = {
+    min: { x: -halfT, y: -halfH, z: -halfL },
+    max: { x: halfT, y: halfH, z: halfL },
+  };
+
+  const localHit = rayAabb(localOrigin, localDir, localBox, maxDistance);
+  if (localHit === null) {
+    return null;
+  }
+  return {
+    distance: localHit.distance,
+    point: add(origin, scale(direction, localHit.distance)),
+  };
+}
+
 export function raycastMap(
   map: ArenaMap,
   origin: Vec3,
@@ -92,7 +142,11 @@ export function raycastMap(
     if (box.kind === 'ladder') {
       continue;
     }
-    const hit = rayAabb(origin, direction, box, maxDistance);
+    const angledDoor = map.id === 'de_dust2' ? DUST2_ANGLED_DOORS[box.id] : undefined;
+    const hit =
+      angledDoor !== undefined
+        ? rayAngledDoor(origin, direction, angledDoor, box.min.y, box.max.y, maxDistance)
+        : rayAabb(origin, direction, box, maxDistance);
     if (hit === null) {
       continue;
     }

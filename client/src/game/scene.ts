@@ -32,7 +32,12 @@ import {
   Uint32BufferAttribute,
   WebGLRenderer,
 } from 'three';
-import { getSpawnsForTeam, type ArenaMap, type MapBoxKind } from '../../../shared/map';
+import {
+  DUST2_ANGLED_DOORS,
+  getSpawnsForTeam,
+  type ArenaMap,
+  type MapBoxKind,
+} from '../../../shared/map';
 import { getWeapon } from '../../../shared/weapons';
 import { disposeObject3D } from './dispose';
 
@@ -263,33 +268,6 @@ function freezeStaticGroup(group: Group): Group {
   });
   return group;
 }
-
-interface AngledDoorDef {
-  x0: number;
-  z0: number;
-  x1: number;
-  z1: number;
-}
-
-const DUST2_ANGLED_DOORS: Record<string, AngledDoorDef> = {
-  // Сайт Б:
-  // Северная створка (дальняя от КТ): распахнута вглубь сайта Б под 45°, закрывает обзор на плент Б
-  'b-door-leaf-n': { x0: -15.9, z0: -16.8, x1: -17.3, z1: -15.4 },
-  // Южная створка (ближняя к КТ): под 45° наружу, направляет обзор только на выход с темки на Б
-  'b-door-leaf-s': { x0: -15.9, z0: -13.6, x1: -14.9, z1: -14.6 },
-
-  // Выход с КТ на мид: двери под 45 градусов смотрят на шорт
-  'mid-door-leaf-w': { x0: -2.6, z0: -1.7, x1: -1.4, z1: -0.5 },
-  'mid-door-leaf-e': { x0: 0.5, z0: -1.7, x1: 0.9, z1: -1.3 },
-
-  // Вход в банку со стороны Т: двери под 45 градусов смотрят на мид
-  'banka-s-leaf-w': { x0: 16.0, z0: 11.6, x1: 15.0, z1: 12.6 },
-  'banka-s-leaf-e': { x0: 19.2, z0: 11.6, x1: 18.0, z1: 12.8 },
-
-  // Выход с банки в лонг: двери под 45 градусов смотрят в лонг
-  'banka-n-leaf-w': { x0: 16.0, z0: 2.8, x1: 17.1, z1: 1.7 },
-  'banka-n-leaf-e': { x0: 19.2, z0: 2.8, x1: 20.1, z1: 1.9 },
-};
 
 function makeArenaGeometry(map: ArenaMap, maxAnisotropy = 4): Group {
   const group = new Group();

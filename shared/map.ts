@@ -7,6 +7,39 @@ export type MapId = 'fy_wow' | 'fy_sand' | 'de_dust2';
 export type MapBoxKind =
   'floor' | 'wall' | 'crate' | 'platform' | 'column' | 'ramp' | 'roof' | 'rock' | 'ladder';
 
+export interface AngledDoorDef {
+  x0: number;
+  z0: number;
+  x1: number;
+  z1: number;
+  thickness: number;
+}
+
+export const DUST2_ANGLED_DOORS: Record<string, AngledDoorDef> = {
+  // Сайт Б (проем z = -16.8 .. -13.6, ширина 3.2 м, высота y = 1.2 .. 3.8):
+  // Обе створки одинаковой длины 1.25 м, умеренный угол ~16.3° (dx = 0.35 м, dz = 1.20 м).
+  // Дальняя створка b-door-leaf-n (северная) открыта вглубь сайта Б: полностью закрывает КТ обзор на плент Б
+  // и дает обзор ТОЛЬКО в одну сторону — строго на выход с верхней темки!
+  'b-door-leaf-n': { x0: -15.9, z0: -16.8, x1: -16.25, z1: -15.6, thickness: 0.12 },
+  // Ближняя створка b-door-leaf-s (южная) открыта наружу в сторону КТ.
+  'b-door-leaf-s': { x0: -15.9, z0: -13.6, x1: -15.55, z1: -14.8, thickness: 0.12 },
+
+  // Выход с КТ на мид (проем x = -2.6 .. 0.5, ширина 3.1 м, высота y = 0.0 .. 3.4):
+  // Обе створки одинаковой длины 1.25 м, открываются навстречу проходу в сторону КТ мидла
+  'mid-door-leaf-w': { x0: -2.6, z0: -0.75, x1: -1.4, z1: -1.1, thickness: 0.12 },
+  'mid-door-leaf-e': { x0: 0.5, z0: -2.6, x1: -0.7, z1: -2.25, thickness: 0.12 },
+
+  // Банка юг / вход с T (проем x = 16.0 .. 19.2, ширина 3.2 м, высота y = 1.6 .. 4.2):
+  // Обе створки одинаковой длины 1.25 м, открываются симметрично внутрь банки
+  'banka-s-leaf-w': { x0: 16.0, z0: 11.65, x1: 17.2, z1: 11.3, thickness: 0.12 },
+  'banka-s-leaf-e': { x0: 19.2, z0: 11.65, x1: 18.0, z1: 11.3, thickness: 0.12 },
+
+  // Банка север / выход в лонг (проем x = 16.0 .. 19.2, ширина 3.2 м, высота y = 1.6 .. 4.2):
+  // Обе створки одинаковой длины 1.25 м, открываются симметрично наружу в лонг
+  'banka-n-leaf-w': { x0: 16.0, z0: 2.85, x1: 17.2, z1: 2.5, thickness: 0.12 },
+  'banka-n-leaf-e': { x0: 19.2, z0: 2.85, x1: 18.0, z1: 2.5, thickness: 0.12 },
+};
+
 export interface MapTheme {
   sky: string;
   fog: string;
@@ -1077,12 +1110,12 @@ function buildDust2Arena(): ArenaMap {
   addBox('block-ziga-banka', vec3(12.5, 0, -4.5), vec3(13.5, 7.6, 0.5), DUST2.wall, 'wall');
   addBox('block-long-corner', vec3(12.5, 0, -16.5), vec3(24.5, 7.6, -4.5), DUST2.wall, 'wall');
 
-  // ДВЕРИ (MID DOORS staggered diagonally so players pass sideways toward Xbox, not toward Lower Tunnels!)
+  // ДВЕРИ (MID DOORS: створки одинаковой длины 1.25 м, направлены вдоль диагонального прохода в сторону КТ мидла)
   addBox('mid-door-pier-w', vec3(-3.5, 0, -2.7), vec3(-2.6, 8.2, -0.7), DUST2.wallDark, 'wall');
   addBox('mid-door-pier-e', vec3(0.5, 0, -2.7), vec3(1.5, 8.2, -1.5), DUST2.wallDark, 'wall');
   addBox('mid-door-lintel', vec3(-2.6, 3.4, -2.7), vec3(0.5, 8.2, -1.5), DUST2.arch, 'wall');
-  addBox('mid-door-leaf-e', vec3(-0.8, 0, -2.7), vec3(0.5, 3.4, -2.3), DUST2.door, 'crate');
-  addBox('mid-door-leaf-w', vec3(-2.6, 0, -1.1), vec3(-0.6, 3.4, -0.7), DUST2.door, 'crate');
+  addBox('mid-door-leaf-w', vec3(-2.6, 0, -1.16), vec3(-1.38, 3.4, -0.69), DUST2.door, 'crate');
+  addBox('mid-door-leaf-e', vec3(-0.72, 0, -2.66), vec3(0.5, 3.4, -2.19), DUST2.door, 'crate');
 
   // ---------------------------------------------------------------------------
   // 3. EAST BELT: БАНКА (LONG DOORS), СИНИЙ (BLUE), 90, ЯМА (PIT),
@@ -1095,13 +1128,15 @@ function buildDust2Arena(): ArenaMap {
   addBox('banka-s-pier-w', vec3(13.5, 1.6, 11.3), vec3(16.0, 5.4, 12), DUST2.wallDark, 'wall');
   addBox('banka-s-pier-e', vec3(19.2, 1.6, 11.3), vec3(21.2, 5.4, 12), DUST2.wallDark, 'wall');
   addBox('banka-s-lintel', vec3(16.0, 4.2, 11.3), vec3(19.2, 5.4, 12), DUST2.arch, 'wall');
-  addBox('banka-s-leaf-w', vec3(16.0, 1.6, 11.4), vec3(16.8, 4.2, 11.8), DUST2.door, 'crate');
-  addBox('banka-s-leaf-e', vec3(18.4, 1.6, 11.5), vec3(19.2, 4.2, 11.9), DUST2.door, 'crate');
+  // Две створки одинаковой длины 1.25 м, открываются симметрично внутрь банки
+  addBox('banka-s-leaf-w', vec3(16.0, 1.6, 11.24), vec3(17.2, 4.2, 11.71), DUST2.door, 'crate');
+  addBox('banka-s-leaf-e', vec3(18.0, 1.6, 11.24), vec3(19.2, 4.2, 11.71), DUST2.door, 'crate');
   addBox('banka-n-pier-w', vec3(13.5, 1.6, 2.5), vec3(16.0, 5.4, 3.2), DUST2.wallDark, 'wall');
   addBox('banka-n-pier-e', vec3(19.2, 1.6, 2.5), vec3(21.2, 5.4, 3.2), DUST2.wallDark, 'wall');
   addBox('banka-n-lintel', vec3(16.0, 4.2, 2.5), vec3(19.2, 5.4, 3.2), DUST2.arch, 'wall');
-  addBox('banka-n-leaf-w', vec3(16.0, 1.6, 2.6), vec3(16.8, 4.2, 3.0), DUST2.door, 'crate');
-  addBox('banka-n-leaf-e', vec3(18.4, 1.6, 2.7), vec3(19.2, 4.2, 3.1), DUST2.door, 'crate');
+  // Две створки одинаковой длины 1.25 м, открываются симметрично наружу в лонг
+  addBox('banka-n-leaf-w', vec3(16.0, 1.6, 2.44), vec3(17.2, 4.2, 2.91), DUST2.door, 'crate');
+  addBox('banka-n-leaf-e', vec3(18.0, 1.6, 2.44), vec3(19.2, 4.2, 2.91), DUST2.door, 'crate');
   addBox('banka-roof', vec3(13.5, 5.4, 2.5), vec3(22, 6.2, 12), DUST2.roof, 'roof');
 
   // 7 (Spacious Long Doors exit courtyard z: -4.5 .. 2.5), СИНИЙ (Blue Container), 90 (Side Pit) & deep ЯМА (Pit)
@@ -1355,15 +1390,15 @@ function buildDust2Arena(): ArenaMap {
   );
   addBox('b-b3-crate', vec3(-21.8, 1.2, -23.4), vec3(-19.8, 2.55, -21.4), DUST2.crateTarp, 'crate');
 
-  // East wall of Bombsite B with angled 45-deg ДВЕРИ B and raised/shifted ОКНО B (z: -26.8 .. -23.8, y = 2.85)
+  // East wall of Bombsite B with angled ДВЕРИ B and raised/shifted ОКНО B (z: -26.8 .. -23.8, y = 2.85)
   addBox('b-east-wall-s', vec3(-16.3, 1.2, -13.6), vec3(-15.5, 7.6, -10), DUST2.wall, 'wall');
   addBox('b-doors-lintel', vec3(-16.3, 3.8, -16.8), vec3(-15.5, 7.6, -13.6), DUST2.arch, 'wall');
-  // Поменяны местами: северная створка стоит дальше со стороны КТ (глубже в Б: x = -17.5..-17.1),
-  // полностью блокируя обзор со стороны КТ на плент Б и давая обзор в одну сторону (с сайта Б на выход КТ)
-  addBox('b-door-leaf-n', vec3(-17.5, 1.2, -16.8), vec3(-17.1, 3.8, -14.9), DUST2.door, 'crate');
-  // Южная створка стоит ближе со стороны КТ (на x = -15.8..-15.4),
-  // направляя обзор со стороны КТ строго на выход из темки на Б
-  addBox('b-door-leaf-s', vec3(-15.8, 1.2, -15.5), vec3(-15.4, 3.8, -13.6), DUST2.door, 'crate');
+  // Две створки одинаковой длины 1.25 м:
+  // Северная створка (дальняя от КТ) открыта вглубь сайта Б, блокирует обзор со стороны КТ на плент Б
+  // и дает обзор ТОЛЬКО в одну сторону — строго на выход с темки на Б
+  addBox('b-door-leaf-n', vec3(-16.3, 1.2, -16.8), vec3(-15.84, 3.8, -15.6), DUST2.door, 'crate');
+  // Южная створка (ближняя к КТ) открыта наружу в сторону КТ
+  addBox('b-door-leaf-s', vec3(-15.96, 1.2, -14.8), vec3(-15.5, 3.8, -13.6), DUST2.door, 'crate');
   addBox('b-east-wall-mid', vec3(-16.3, 1.2, -23.8), vec3(-15.5, 7.6, -16.8), DUST2.wall, 'wall');
   addBox(
     'b-window-sill',
