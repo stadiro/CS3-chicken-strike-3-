@@ -8,7 +8,7 @@ import type { WeaponId, WeaponSlot } from './weapons';
  * Wire protocol shared by the browser client and the authoritative server.
  * Bump PROTOCOL_VERSION on every breaking change.
  */
-export const PROTOCOL_VERSION = 13;
+export const PROTOCOL_VERSION = 14;
 
 export const TICK_RATE = DEFAULT_MATCH_CONFIG.tickRate;
 export const SNAPSHOT_BUFFER_MS = DEFAULT_MATCH_CONFIG.snapshotBufferMs;
@@ -18,6 +18,7 @@ export const RESPAWN_DELAY_MS = DEFAULT_MATCH_CONFIG.respawnMs;
 export const RECONNECT_WINDOW_MS = DEFAULT_MATCH_CONFIG.reconnectWindowMs;
 
 export type Team = 'alpha' | 'bravo';
+export type RoomGameMode = '1v1' | '2v2';
 export type MatchPhase = 'lobby' | 'countdown' | 'round_over' | 'live' | 'paused' | 'ended';
 export type MatchEndReason = 'frags' | 'rounds' | 'time' | 'abandon' | 'bomb' | 'defuse';
 export type HitZone = 'head' | 'body' | 'legs';
@@ -73,6 +74,7 @@ export interface RoomSummary {
   mapId: string;
   mapName: string;
   mode: MatchMode;
+  roomMode: RoomGameMode;
   playerCount: number;
   maxPlayers: number;
   phase: MatchPhase;
@@ -82,6 +84,7 @@ export interface RoomSummary {
 export interface CreateRoomRequest {
   name: string;
   mapId: string;
+  roomMode?: RoomGameMode;
 }
 
 export interface CreateRoomResult {
@@ -144,6 +147,7 @@ export interface PlayerSnapshot {
   kills: number;
   deaths: number;
   connected: boolean;
+  ready: boolean;
 }
 
 export interface PickupSnapshot {
@@ -243,12 +247,14 @@ export interface LobbyPlayer {
   deaths: number;
   money: number;
   rematchVote: boolean;
+  ready: boolean;
 }
 
 export interface LobbyState {
   mapId: string;
   mapName: string;
   mode: MatchMode;
+  roomMode: RoomGameMode;
   phase: MatchPhase;
   round: number;
   players: LobbyPlayer[];
@@ -264,6 +270,7 @@ export interface LobbyState {
   fragLimit: number;
   roundsToWin: number;
   sideSwapAfterRound: number;
+  maxPlayers: number;
 }
 
 export interface CountdownState {
@@ -406,6 +413,8 @@ export interface ClientToServerEvents {
   create_room: (payload: CreateRoomRequest, ack: (result: CreateRoomResult) => void) => void;
   join: (payload: JoinRequest, ack: (result: JoinResult) => void) => void;
   input: (payload: InputFrame) => void;
+  choose_team: (payload: { team: Team }) => void;
+  set_ready: (payload: { ready: boolean }) => void;
   buy: (payload: BuyRequest) => void;
   refund: (payload: BuyRequest) => void;
   rematch: () => void;

@@ -113,6 +113,7 @@ export interface PlayerState {
   lastDamageAt: number;
   lastAttackerId: string | null;
   rematchVote: boolean;
+  ready: boolean;
 }
 
 export interface PickupState {

@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { DEFAULT_MAP_ID, getMapById, type ArenaMap, type MapId } from '../../shared/map';
-import type { RoomSummary } from '../../shared/protocol';
+import type { RoomGameMode, RoomSummary } from '../../shared/protocol';
 import { Match, type MatchEvent, type MatchOptions } from './match';
 
 export interface GameRoom {
@@ -16,6 +16,7 @@ export interface CreateRoomOptions {
   id?: string;
   name: string;
   mapId: MapId | string;
+  roomMode?: RoomGameMode;
   matchOptions?: Partial<MatchOptions>;
   isDefault?: boolean;
 }
@@ -57,6 +58,7 @@ export class RoomManager {
 
     const match = new Match({
       map,
+      roomMode: options.roomMode ?? '1v1',
       ...options.matchOptions,
     });
 
@@ -156,8 +158,9 @@ export class RoomManager {
         mapId: room.map.id,
         mapName: room.map.name,
         mode: room.match.getMode(),
+        roomMode: room.match.roomMode,
         playerCount: connectedCount,
-        maxPlayers: 2,
+        maxPlayers: room.match.maxPlayers,
         phase: room.match.currentPhase,
         createdAt: room.createdAt,
       });

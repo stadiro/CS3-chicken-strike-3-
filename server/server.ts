@@ -18,7 +18,15 @@ import { createCrosshairStore, CrosshairValidationError, type CrosshairStore } f
 import { RoomManager, type GameRoom } from './game/roomManager';
 import type { Match, MatchEvent, MatchOptions } from './game/match';
 import { RateLimiter } from './net/rateLimiter';
-import { buySchema, createRoomSchema, inputSchema, joinSchema, pingSchema } from './net/validation';
+import {
+  buySchema,
+  chooseTeamSchema,
+  createRoomSchema,
+  inputSchema,
+  joinSchema,
+  pingSchema,
+  setReadySchema,
+} from './net/validation';
 import { formatServerUrls } from './network';
 
 const projectRoot = process.cwd();
@@ -213,6 +221,7 @@ function registerSocketHandlers(io: GameSocketServer, runtime: Runtime): void {
           const room = rooms.createRoom({
             name: parsed.data.name,
             mapId: parsed.data.mapId,
+            roomMode: parsed.data.roomMode ?? '1v1',
           });
           io.emit('rooms_update', rooms.listRooms());
           if (typeof ack === 'function') {
@@ -367,6 +376,42 @@ function registerSocketHandlers(io: GameSocketServer, runtime: Runtime): void {
           return;
         }
         room.match.voteRematch(playerId, now);
+        runtime.broadcastRoomEvents(room, room.match.drainEvents());
+        runtime.broadcastRoomSnapshot(room, now);
+      });
+    });
+
+    socket.on('choose_team', (payload) => {
+      runSafely(socket.id, 'choose_team', () => {
+        const playerId = socket.data.playerId;
+        const room = getSocketRoom();
+        if (playerId === undefined || room === undefined) {
+          return;
+        }
+        const parsed = chooseTeamSchema.safeParse(payload);
+        if (!parsed.success) {
+          return;
+        }
+        const now = Date.now();
+        room.match.chooseTeam(playerId, parsed.data.team, now);
+        runtime.broadcastRoomEvents(room, room.match.drainEvents());
+        runtime.broadcastRoomSnapshot(room, now);
+      });
+    });
+
+    socket.on('set_ready', (payload) => {
+      runSafely(socket.id, 'set_ready', () => {
+        const playerId = socket.data.playerId;
+        const room = getSocketRoom();
+        if (playerId === undefined || room === undefined) {
+          return;
+        }
+        const parsed = setReadySchema.safeParse(payload);
+        if (!parsed.success) {
+          return;
+        }
+        const now = Date.now();
+        room.match.setReady(playerId, parsed.data.ready, now);
         runtime.broadcastRoomEvents(room, room.match.drainEvents());
         runtime.broadcastRoomSnapshot(room, now);
       });

@@ -75,6 +75,7 @@ export function createPlayer(
     lastDamageAt: 0,
     lastAttackerId: null,
     rematchVote: false,
+    ready: false,
   };
 }
 

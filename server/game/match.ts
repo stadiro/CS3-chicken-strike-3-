@@ -67,6 +67,7 @@ import type {
   ShotEvent,
   Snapshot,
   Team,
+  RoomGameMode,
 } from '../../shared/protocol';
 import { damageAtDistance, getWeapon, isScopedWeapon } from '../../shared/weapons';
 import { applyDamage, applyFallDamage } from './damage';
@@ -121,6 +122,7 @@ export type MatchEvent =
 export interface MatchOptions {
   map?: ArenaMap;
   mode?: MatchMode;
+  roomMode?: RoomGameMode;
   config?: Partial<MatchConfig>;
   seed?: number;
 }
@@ -157,8 +159,17 @@ function emptyScores(): Record<Team, number> {
 
 export class Match {
   readonly config: MatchConfig;
+  readonly roomMode: RoomGameMode;
   mode: MatchMode;
   map: ArenaMap;
+
+  get maxPlayers(): number {
+    return this.roomMode === '2v2' ? 4 : 2;
+  }
+
+  get maxPerTeam(): number {
+    return this.roomMode === '2v2' ? 2 : 1;
+  }
 
   private readonly rng: Rng;
   private readonly players = new Map<string, PlayerState>();
@@ -193,6 +204,7 @@ export class Match {
 
   constructor(options: MatchOptions = {}) {
     this.config = { ...DEFAULT_MATCH_CONFIG, ...options.config };
+    this.roomMode = options.roomMode ?? '1v1';
     this.map = options.map ?? ARENA_MAP;
     this.mode = options.mode ?? this.map.mode ?? 'arena';
     this.rng = new Rng(options.seed ?? randomSeed());
@@ -330,8 +342,7 @@ export class Match {
           }
         } else if (
           this.phase === 'lobby' &&
-          this.players.size === 2 &&
-          this.getPlayers().every((player) => player.connected)
+          this.shouldStartMatch()
         ) {
           this.startNewMatch(now);
         } else {
@@ -362,9 +373,9 @@ export class Match {
       };
     }
 
-    if (this.players.size >= 2) {
+    if (this.players.size >= this.maxPlayers) {
       return {
-        result: { ok: false, error: 'Сервер заполнен: уже играют двое' },
+        result: { ok: false, error: `Сервер заполнен: уже играют ${this.maxPlayers}` },
         player: null,
       };
     }
@@ -389,6 +400,7 @@ export class Match {
     const sessionToken = randomBytes(24).toString('hex');
     const player = createPlayer(id, sessionToken, name, team, now, spawn.position, spawn.yaw);
     player.socketId = socketId;
+    player.ready = this.roomMode === '1v1';
     this.players.set(id, player);
     if (
       isEconomyMode(this.mode) &&
@@ -399,7 +411,7 @@ export class Match {
     }
 
     if (this.phase === 'lobby' || this.phase === 'ended') {
-      if (this.players.size === 2) {
+      if (this.shouldStartMatch()) {
         this.startNewMatch(now);
       } else {
         this.emitLobby();
@@ -501,12 +513,27 @@ export class Match {
       this.phase === 'round_over' ||
       this.phase === 'paused'
     ) {
-      const opponent = this.findConnectedOpponent(player);
       this.players.delete(playerId);
-      if (opponent !== null) {
-        this.endMatch(opponent.id, 'abandon', now);
-      } else {
+      const remainingAlpha = this.getPlayers().filter((p) => p.team === 'alpha' && p.connected);
+      const remainingBravo = this.getPlayers().filter((p) => p.team === 'bravo' && p.connected);
+
+      if (remainingAlpha.length === 0 && remainingBravo.length > 0) {
+        this.endMatch(remainingBravo[0]?.id ?? null, 'abandon', now);
+      } else if (remainingBravo.length === 0 && remainingAlpha.length > 0) {
+        this.endMatch(remainingAlpha[0]?.id ?? null, 'abandon', now);
+      } else if (remainingAlpha.length === 0 && remainingBravo.length === 0) {
         this.resetToLobby(now);
+      } else {
+        if (this.phase === 'paused') {
+          const everyoneConnected = this.getPlayers().every((p) => p.connected);
+          if (everyoneConnected) {
+            this.resumeFromPause(now);
+          } else {
+            this.emitLobby();
+          }
+        } else {
+          this.emitLobby();
+        }
       }
       return;
     }
@@ -841,7 +868,7 @@ export class Match {
     this.emitLobby();
 
     const connected = this.getPlayers().filter((candidate) => candidate.connected);
-    if (connected.length === 2 && connected.every((candidate) => candidate.rematchVote)) {
+    if (connected.length === this.maxPlayers && connected.every((candidate) => candidate.rematchVote)) {
       this.startNewMatch(now);
     }
     return true;
@@ -1074,6 +1101,8 @@ export class Match {
       mapId: this.map.id,
       mapName: this.map.name,
       mode: this.mode,
+      roomMode: this.roomMode,
+      maxPlayers: this.maxPlayers,
       phase: this.phase,
       round: this.round,
       players: this.getOrderedPlayers().map((player) => this.toLobbyPlayer(player)),
@@ -1140,12 +1169,77 @@ export class Match {
   }
 
   private findFreeTeam(): Team | null {
-    for (const team of TEAM_ORDER) {
-      if (!this.getPlayers().some((player) => player.team === team)) {
-        return team;
-      }
+    const alphaCount = this.getPlayers().filter((player) => player.team === 'alpha').length;
+    const bravoCount = this.getPlayers().filter((player) => player.team === 'bravo').length;
+
+    if (alphaCount < this.maxPerTeam && bravoCount < this.maxPerTeam) {
+      return alphaCount <= bravoCount ? 'alpha' : 'bravo';
+    }
+    if (alphaCount < this.maxPerTeam) {
+      return 'alpha';
+    }
+    if (bravoCount < this.maxPerTeam) {
+      return 'bravo';
     }
     return null;
+  }
+
+  chooseTeam(playerId: string, team: Team, now: number): boolean {
+    const player = this.players.get(playerId);
+    if (player === undefined) {
+      return false;
+    }
+    if (this.phase !== 'lobby') {
+      return false;
+    }
+    if (player.team === team) {
+      return true;
+    }
+    const otherInTeam = this.getPlayers().filter((p) => p.id !== playerId && p.team === team);
+    if (otherInTeam.length >= this.maxPerTeam) {
+      return false;
+    }
+    player.team = team;
+    player.side = team === 'alpha' ? 't' : 'ct';
+    if (this.roomMode === '2v2') {
+      player.ready = false;
+    }
+    const spawn = this.pickSpawn(team, player.id);
+    if (spawn !== null) {
+      player.position = { ...spawn.position };
+      player.yaw = spawn.yaw;
+    }
+    this.emitLobby();
+    return true;
+  }
+
+  setReady(playerId: string, ready: boolean, now: number): boolean {
+    const player = this.players.get(playerId);
+    if (player === undefined) {
+      return false;
+    }
+    if (this.phase !== 'lobby') {
+      return false;
+    }
+    player.ready = ready;
+    this.emitLobby();
+    if (this.shouldStartMatch()) {
+      this.startNewMatch(now);
+    }
+    return true;
+  }
+
+  private shouldStartMatch(): boolean {
+    if (this.players.size !== this.maxPlayers) {
+      return false;
+    }
+    const players = this.getPlayers();
+    if (!players.every((player) => player.connected && player.ready)) {
+      return false;
+    }
+    const alphaCount = players.filter((player) => player.team === 'alpha').length;
+    const bravoCount = players.filter((player) => player.team === 'bravo').length;
+    return alphaCount === this.maxPerTeam && bravoCount === this.maxPerTeam;
   }
 
   private getOrderedPlayers(): PlayerState[] {
@@ -1206,21 +1300,31 @@ export class Match {
     return null;
   }
 
-  private pickSpawn(team: Team): { position: Vec3; yaw: number } | null {
+  private pickSpawn(team: Team, forPlayerId?: string): { position: Vec3; yaw: number } | null {
     const spawns = getSpawnsForTeam(this.map, team);
     if (spawns.length === 0) {
       return null;
     }
 
-    const enemy = this.getPlayers().find((player) => player.team !== team);
+    const occupied = this.getPlayers().filter(
+      (player) => player.id !== forPlayerId && player.team === team && player.alive,
+    );
+    const freeSpawns = spawns.filter(
+      (spawn) => !occupied.some((other) => distance(spawn.position, other.position) < 1.2),
+    );
+    const candidateSpawns = freeSpawns.length > 0 ? freeSpawns : spawns;
+
+    const enemy =
+      this.getPlayers().find((player) => player.team !== team && player.alive) ??
+      this.getPlayers().find((player) => player.team !== team);
     if (enemy === undefined) {
-      const chosen = this.rng.pick(spawns);
+      const chosen = this.rng.pick(candidateSpawns);
       return chosen === null ? null : { position: chosen.position, yaw: chosen.yaw };
     }
 
-    let best = spawns[0];
+    let best = candidateSpawns[0];
     let bestDistance = -1;
-    for (const spawn of spawns) {
+    for (const spawn of candidateSpawns) {
       const currentDistance = distance(spawn.position, enemy.position);
       if (currentDistance > bestDistance) {
         best = spawn;
@@ -1231,7 +1335,7 @@ export class Match {
   }
 
   private spawnPlayerAtBase(player: PlayerState, now: number, preserveLoadout = false): void {
-    const spawn = this.pickSpawn(this.spawnTeamForPlayer(player));
+    const spawn = this.pickSpawn(this.spawnTeamForPlayer(player), player.id);
     if (spawn === null) {
       return;
     }
@@ -1900,8 +2004,15 @@ export class Match {
       return;
     }
 
-    if (!suicide) {
-      this.roundWinnerTeam = killer.team;
+    const aliveAlpha = this.getPlayers().filter((player) => player.team === 'alpha' && player.alive).length;
+    const aliveBravo = this.getPlayers().filter((player) => player.team === 'bravo' && player.alive).length;
+
+    if (aliveAlpha === 0) {
+      this.roundWinnerTeam = 'bravo';
+    } else if (aliveBravo === 0) {
+      this.roundWinnerTeam = 'alpha';
+    } else {
+      return;
     }
 
     if (!suicide && killer.kills >= this.config.fragLimit) {
@@ -2565,7 +2676,7 @@ export class Match {
   }
 
   private startNewMatch(now: number): void {
-    if (this.players.size < 2) {
+    if (this.players.size < this.maxPlayers) {
       this.phase = 'lobby';
       this.emitLobby();
       return;
@@ -2575,7 +2686,7 @@ export class Match {
   }
 
   private startCountdown(now: number, resumed: boolean): void {
-    if (this.players.size < 2) {
+    if ((!resumed && this.players.size < this.maxPlayers) || (resumed && this.players.size < 2)) {
       this.phase = 'lobby';
       this.emitLobby();
       return;
@@ -2664,18 +2775,24 @@ export class Match {
       const connected = this.getPlayers().filter((player) => player.connected);
       const disconnected = this.getPlayers().filter((player) => !player.connected);
 
-      if (connected.length === 1) {
-        const winner = connected[0];
-        if (winner !== undefined) {
-          this.endMatch(winner.id, 'abandon', now);
-        }
-        for (const player of disconnected) {
-          this.players.delete(player.id);
-        }
+      for (const player of disconnected) {
+        this.players.delete(player.id);
+      }
+
+      const connectedAlpha = connected.filter((p) => p.team === 'alpha');
+      const connectedBravo = connected.filter((p) => p.team === 'bravo');
+
+      if (connectedAlpha.length === 0 && connectedBravo.length > 0) {
+        this.endMatch(connectedBravo[0]?.id ?? null, 'abandon', now);
         this.emitLobby();
-      } else if (connected.length === 0) {
+      } else if (connectedBravo.length === 0 && connectedAlpha.length > 0) {
+        this.endMatch(connectedAlpha[0]?.id ?? null, 'abandon', now);
+        this.emitLobby();
+      } else if (connectedAlpha.length === 0 && connectedBravo.length === 0) {
         this.players.clear();
         this.resetToLobby(now);
+      } else {
+        this.resumeFromPause(now);
       }
       return;
     }
@@ -3351,6 +3468,7 @@ export class Match {
       money: player.money,
       deaths: player.deaths,
       rematchVote: player.rematchVote,
+      ready: player.ready,
     };
   }
 
@@ -3385,6 +3503,7 @@ export class Match {
       kills: player.kills,
       deaths: player.deaths,
       connected: player.connected,
+      ready: player.ready,
     };
   }
 

@@ -19,9 +19,20 @@ export const joinSchema = z.object({
 export const createRoomSchema = z.object({
   name: z.string().min(1).max(48),
   mapId: z.string().min(1).max(32),
+  roomMode: z.enum(['1v1', '2v2']).optional(),
+});
+
+export const chooseTeamSchema = z.object({
+  team: z.enum(['alpha', 'bravo']),
+});
+
+export const setReadySchema = z.object({
+  ready: z.boolean(),
 });
 
 export type ValidatedCreateRoomRequest = z.infer<typeof createRoomSchema>;
+export type ValidatedChooseTeamRequest = z.infer<typeof chooseTeamSchema>;
+export type ValidatedSetReadyRequest = z.infer<typeof setReadySchema>;
 
 export const inputSchema = z.object({
   seq: z.number().int().nonnegative(),
