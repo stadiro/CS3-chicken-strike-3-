@@ -9,6 +9,7 @@ import {
   type RoomSummary,
   type ServerHello,
   type ServerToClientEvents,
+  type Team,
 } from '../../../shared/protocol';
 
 export type GameSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
@@ -31,6 +32,8 @@ export interface Connection {
   join(request: JoinRequest): Promise<JoinResult>;
   createRoom(request: CreateRoomRequest): Promise<CreateRoomResult>;
   listRooms(): Promise<RoomSummary[]>;
+  chooseTeam(team: Team): void;
+  setReady(ready: boolean): void;
   getServerTime(): number;
   getPingMs(): number | null;
   getJitterMs(): number;
@@ -228,6 +231,12 @@ export function connectToGameServer(options: ConnectOptions = {}): Connection {
           resolve(rooms);
         });
       }),
+    chooseTeam: (team) => {
+      socket.emit('choose_team', { team });
+    },
+    setReady: (ready) => {
+      socket.emit('set_ready', { ready });
+    },
     getServerTime: () => performance.timeOrigin + performance.now() + (serverTimeOffset ?? 0),
     getPingMs: () => pingMs,
     getJitterMs: () => Math.round(pingJitterMs * 10) / 10,

@@ -15,6 +15,7 @@ import {
   type Snapshot,
   type Team,
   type RoomSummary,
+  type RoomGameMode,
 } from '../../../shared/protocol';
 import {
   BUY_CATEGORY_LABELS,
@@ -69,8 +70,10 @@ const END_REASON: Record<RoundEndEvent['reason'], string> = {
 
 export interface HudCallbacks {
   onJoin(name: string, roomId?: string): void;
-  onCreateRoom(name: string, mapId: string): void;
+  onCreateRoom(name: string, mapId: string, roomMode?: RoomGameMode): void;
   onRefreshRooms(): void;
+  onChooseTeam?(team: Team): void;
+  onSetReady?(ready: boolean): void;
   onRematch(): void;
   onResume(): void;
   onLeave(): void;
@@ -404,15 +407,45 @@ const HUD_TEMPLATE = `
     </div>
   </div>
 
-  <div class="overlay overlay--panel" id="lobby-overlay">
+  <div class="overlay overlay--panel overlay--lobby" id="lobby-overlay">
     <div class="panel panel--lobby">
-      <div class="eyebrow">ЛОББИ <span>//</span> <span id="lobby-map-name">FY_SAND</span></div>
-      <h2 id="lobby-title">Ожидание соперника</h2>
-      <p class="panel__lead" id="lobby-status">Откройте вторую вкладку или пригласите друга.</p>
-      <div class="lobby-players" id="lobby-players"></div>
+      <div class="eyebrow">ЛОББИ <span class="lobby-mode-tag" id="lobby-mode-tag">2v2</span> <span>//</span> <span id="lobby-map-name">FY_SAND</span></div>
+      <h2 id="lobby-title">Ожидание игроков</h2>
+      <p class="panel__lead" id="lobby-status">Займите сторону и нажмите «ГОТОВ» для начала игры.</p>
+
+      <div class="lobby-teams" id="lobby-teams">
+        <div class="lobby-team-column lobby-team--alpha">
+          <div class="lobby-team-header">
+            <div class="lobby-team-title">
+              <span class="lobby-team-dot dot--t"></span>
+              <strong>ТЕРРОРИСТЫ (T)</strong>
+            </div>
+            <button class="button button--small button--team-switch" id="join-team-alpha-btn" type="button">ВЫБРАТЬ T</button>
+          </div>
+          <div class="lobby-team-slots" id="slots-alpha"></div>
+        </div>
+
+        <div class="lobby-team-column lobby-team--bravo">
+          <div class="lobby-team-header">
+            <div class="lobby-team-title">
+              <span class="lobby-team-dot dot--ct"></span>
+              <strong>СПЕЦНАЗ (CT)</strong>
+            </div>
+            <button class="button button--small button--team-switch" id="join-team-bravo-btn" type="button">ВЫБРАТЬ CT</button>
+          </div>
+          <div class="lobby-team-slots" id="slots-bravo"></div>
+        </div>
+      </div>
+
       <div class="lobby-footer">
-        <span id="lobby-timer">Матч начнётся автоматически</span>
-        <button class="button button--ghost button--small" id="copy-link" type="button">СКОПИРОВАТЬ ССЫЛКУ</button>
+        <div class="lobby-footer__controls">
+          <button class="button button--primary" id="lobby-ready-btn" type="button">ГОТОВ К ИГРЕ</button>
+          <span class="lobby-timer" id="lobby-timer">Ожидание готовности</span>
+        </div>
+        <div class="lobby-footer__actions">
+          <button class="button button--ghost button--small" id="copy-link" type="button">СКОПИРОВАТЬ ССЫЛКУ</button>
+          <button class="button button--ghost button--small" id="lobby-leave-button" type="button">ВЫЙТИ</button>
+        </div>
       </div>
     </div>
   </div>
@@ -532,11 +565,27 @@ const HUD_TEMPLATE = `
   <div class="overlay overlay--panel overlay--create-room" id="create-room-overlay">
     <div class="panel panel--create-room">
       <div class="eyebrow">НОВАЯ СЕССИЯ <span>//</span> НАСТРОЙКА</div>
-      <h2>Создать игру 1v1</h2>
-      <p class="panel__lead">Выберите карту для дуэли и задайте название комнаты.</p>
+      <h2>Создать игру</h2>
+      <p class="panel__lead">Выберите формат матча, карту и задайте название комнаты.</p>
       <form class="create-room-form" id="create-room-form">
         <label for="create-room-name">НАЗВАНИЕ ИГРЫ</label>
-        <input id="create-room-name" maxlength="32" placeholder="Например: Дуэль на Dust 2" autocomplete="off" />
+        <input id="create-room-name" maxlength="32" placeholder="Например: Битва на Dust 2" autocomplete="off" />
+
+        <div class="mode-select-title">ФОРМАТ МАТЧА</div>
+        <div class="mode-cards-grid" id="mode-cards-grid">
+          <label class="mode-radio-card is-selected">
+            <input type="radio" name="create-room-mode" value="1v1" checked />
+            <div class="mode-radio-card__badge">ДУЭЛЬ</div>
+            <div class="mode-radio-card__name">1 VS 1</div>
+            <div class="mode-radio-card__desc">2 игрока (1T против 1CT)</div>
+          </label>
+          <label class="mode-radio-card">
+            <input type="radio" name="create-room-mode" value="2v2" />
+            <div class="mode-radio-card__badge">КОМАНДЫ</div>
+            <div class="mode-radio-card__name">2 VS 2</div>
+            <div class="mode-radio-card__desc">4 игрока (2T против 2CT)</div>
+          </label>
+        </div>
 
         <div class="map-select-title">ВЫБЕРИТЕ КАРТУ</div>
         <div class="map-cards-grid" id="map-cards-grid">
@@ -603,6 +652,7 @@ export function createHud(callbacks: HudCallbacks): Hud {
   const createRoomForm = requireElement<HTMLFormElement>(root, 'create-room-form');
   const createRoomNameInput = requireElement<HTMLInputElement>(root, 'create-room-name');
   const mapCardsGrid = requireElement<HTMLDivElement>(root, 'map-cards-grid');
+  const modeCardsGrid = requireElement<HTMLDivElement>(root, 'mode-cards-grid');
   const createRoomError = requireElement<HTMLParagraphElement>(root, 'create-room-error');
   const createRoomCancelBtn = requireElement<HTMLButtonElement>(root, 'create-room-cancel-btn');
   const startStatus = requireElement<HTMLSpanElement>(root, 'start-status');
@@ -689,7 +739,13 @@ export function createHud(callbacks: HudCallbacks): Hud {
   );
   const lobbyTitle = requireElement<HTMLHeadingElement>(root, 'lobby-title');
   const lobbyStatus = requireElement<HTMLParagraphElement>(root, 'lobby-status');
-  const lobbyPlayers = requireElement<HTMLDivElement>(root, 'lobby-players');
+  const lobbyModeTag = requireElement<HTMLSpanElement>(root, 'lobby-mode-tag');
+  const joinTeamAlphaBtn = requireElement<HTMLButtonElement>(root, 'join-team-alpha-btn');
+  const joinTeamBravoBtn = requireElement<HTMLButtonElement>(root, 'join-team-bravo-btn');
+  const slotsAlpha = requireElement<HTMLDivElement>(root, 'slots-alpha');
+  const slotsBravo = requireElement<HTMLDivElement>(root, 'slots-bravo');
+  const lobbyReadyBtn = requireElement<HTMLButtonElement>(root, 'lobby-ready-btn');
+  const lobbyLeaveButton = requireElement<HTMLButtonElement>(root, 'lobby-leave-button');
   const lobbyTimer = requireElement<HTMLSpanElement>(root, 'lobby-timer');
   const copyLinkButton = requireElement<HTMLButtonElement>(root, 'copy-link');
   const resumeButton = requireElement<HTMLButtonElement>(root, 'resume-button');
@@ -1289,55 +1345,97 @@ export function createHud(callbacks: HudCallbacks): Hud {
   };
 
   const renderLobbyPlayers = (state: LobbyState): void => {
-    lobbyPlayers.replaceChildren();
-    const slots: Array<{ team: Team; player: LobbyState['players'][number] | null }> = [
-      { team: 'alpha', player: state.players.find((player) => player.team === 'alpha') ?? null },
-      { team: 'bravo', player: state.players.find((player) => player.team === 'bravo') ?? null },
-    ];
+    slotsAlpha.replaceChildren();
+    slotsBravo.replaceChildren();
 
-    for (const slot of slots) {
-      const card = createElement('div', `lobby-player lobby-player--${slot.team}`);
-      if (slot.player === null) {
-        card.classList.add('lobby-player--empty');
-        card.append(
-          createElement('span', 'lobby-player__team', TEAM_LABEL[slot.team]),
-          createElement('strong', 'lobby-player__name', 'Свободный слот'),
-          createElement('span', 'lobby-player__meta', 'Пригласите второго игрока'),
-        );
+    const maxPerTeam = state.maxPlayers ? Math.floor(state.maxPlayers / 2) : 1;
+    const is2v2 = state.roomMode === '2v2';
+
+    setText(lobbyModeTag, is2v2 ? '2 VS 2' : '1 VS 1');
+
+    const alphaPlayers = state.players.filter((p) => p.team === 'alpha');
+    const bravoPlayers = state.players.filter((p) => p.team === 'bravo');
+
+    const localPlayer = state.players.find((p) => p.id === localPlayerId);
+
+    // Update Team switch buttons
+    if (localPlayer) {
+      joinTeamAlphaBtn.disabled = localPlayer.team === 'alpha' || alphaPlayers.length >= maxPerTeam;
+      joinTeamBravoBtn.disabled = localPlayer.team === 'bravo' || bravoPlayers.length >= maxPerTeam;
+
+      if (is2v2) {
+        lobbyReadyBtn.style.display = '';
+        if (localPlayer.ready) {
+          setText(lobbyReadyBtn, 'НЕ ГОТОВ (ОТМЕНА)');
+          lobbyReadyBtn.classList.add('is-ready');
+          lobbyReadyBtn.classList.remove('button--primary');
+          lobbyReadyBtn.classList.add('button--secondary');
+        } else {
+          setText(lobbyReadyBtn, 'ГОТОВ К ИГРЕ');
+          lobbyReadyBtn.classList.remove('is-ready');
+          lobbyReadyBtn.classList.remove('button--secondary');
+          lobbyReadyBtn.classList.add('button--primary');
+        }
       } else {
-        const player = slot.player;
-        const top = createElement('div', 'lobby-player__top');
-        top.append(
-          createElement(
-            'span',
-            'lobby-player__team',
-            `${SIDE_LABEL[player.side]} · ${TEAM_LABEL[slot.team]}`,
-          ),
-          createElement(
-            'span',
-            `lobby-player__state ${player.connected ? 'is-online' : 'is-offline'}`,
-            player.connected ? 'В СЕТИ' : 'ПЕРЕПОДКЛЮЧЕНИЕ',
-          ),
-        );
-        card.append(
-          top,
-          createElement('strong', 'lobby-player__name', player.name),
-          createElement(
-            'span',
-            'lobby-player__meta',
-            `${player.kills} побед · ${player.deaths} поражений`,
-          ),
-        );
-        if (player.id === localPlayerId) {
-          card.classList.add('is-local');
-          card.append(createElement('span', 'lobby-player__you', 'ВЫ'));
-        }
-        if (player.rematchVote) {
-          card.append(createElement('span', 'lobby-player__vote', 'РЕВАНШ ✓'));
-        }
+        lobbyReadyBtn.style.display = 'none';
       }
-      lobbyPlayers.append(card);
+    } else {
+      joinTeamAlphaBtn.disabled = alphaPlayers.length >= maxPerTeam;
+      joinTeamBravoBtn.disabled = bravoPlayers.length >= maxPerTeam;
+      lobbyReadyBtn.style.display = is2v2 ? '' : 'none';
     }
+
+    const renderTeamSlots = (container: HTMLElement, team: Team, teamPlayers: typeof state.players) => {
+      for (let i = 0; i < maxPerTeam; i++) {
+        const player = teamPlayers[i];
+        const slotEl = createElement('div', `lobby-slot lobby-slot--${team}`);
+        if (!player) {
+          slotEl.classList.add('lobby-slot--empty');
+          slotEl.append(
+            createElement('span', 'lobby-slot__empty-icon', '👤'),
+            createElement('strong', 'lobby-slot__empty-text', 'Свободный слот'),
+            createElement('span', 'lobby-slot__empty-hint', 'Ожидание игрока'),
+          );
+        } else {
+          const isLocal = player.id === localPlayerId;
+          if (isLocal) {
+            slotEl.classList.add('is-local');
+          }
+          const infoEl = createElement('div', 'lobby-slot__info');
+          const nameRow = createElement('div', 'lobby-slot__name-row');
+          nameRow.append(createElement('strong', 'lobby-slot__name', player.name));
+          if (isLocal) {
+            nameRow.append(createElement('span', 'lobby-slot__you', 'ВЫ'));
+          }
+          infoEl.append(nameRow);
+
+          const statusRow = createElement('div', 'lobby-slot__status-row');
+          statusRow.append(
+            createElement(
+              'span',
+              `lobby-slot__conn ${player.connected ? 'is-online' : 'is-offline'}`,
+              player.connected ? 'В сети' : 'Связь потеряна',
+            ),
+          );
+
+          if (is2v2) {
+            statusRow.append(
+              createElement(
+                'span',
+                `lobby-slot__ready-badge ${player.ready ? 'is-ready' : 'is-not-ready'}`,
+                player.ready ? 'ГОТОВ ✓' : 'НЕ ГОТОВ',
+              ),
+            );
+          }
+          infoEl.append(statusRow);
+          slotEl.append(infoEl);
+        }
+        container.append(slotEl);
+      }
+    };
+
+    renderTeamSlots(slotsAlpha, 'alpha', alphaPlayers);
+    renderTeamSlots(slotsBravo, 'bravo', bravoPlayers);
   };
 
   const updateVotes = (): void => {
@@ -1508,6 +1606,13 @@ export function createHud(callbacks: HudCallbacks): Hud {
     }
   });
 
+  modeCardsGrid.addEventListener('change', () => {
+    for (const label of modeCardsGrid.querySelectorAll('.mode-radio-card')) {
+      const radio = label.querySelector<HTMLInputElement>('input[type="radio"]');
+      label.classList.toggle('is-selected', radio?.checked === true);
+    }
+  });
+
   createRoomCancelBtn.addEventListener('click', () => {
     setOverlayVisible(createRoomOverlay, false);
   });
@@ -1519,13 +1624,35 @@ export function createHud(callbacks: HudCallbacks): Hud {
       setOverlayVisible(createRoomOverlay, false);
       return;
     }
-    const roomName = createRoomNameInput.value.trim() || 'Дуэль 1v1';
+    const selectedMode = modeCardsGrid.querySelector<HTMLInputElement>(
+      'input[name="create-room-mode"]:checked',
+    );
+    const roomMode: RoomGameMode = selectedMode?.value === '2v2' ? '2v2' : '1v1';
+    const roomName = createRoomNameInput.value.trim() || `Матч ${roomMode}`;
     setText(createRoomError, '');
     const selectedRadio = mapCardsGrid.querySelector<HTMLInputElement>(
       'input[name="create-map-id"]:checked',
     );
     const mapId = selectedRadio?.value ?? 'de_dust2';
-    callbacks.onCreateRoom(roomName, mapId);
+    callbacks.onCreateRoom(roomName, mapId, roomMode);
+  });
+
+  joinTeamAlphaBtn.addEventListener('click', () => {
+    callbacks.onChooseTeam?.('alpha');
+  });
+
+  joinTeamBravoBtn.addEventListener('click', () => {
+    callbacks.onChooseTeam?.('bravo');
+  });
+
+  lobbyReadyBtn.addEventListener('click', () => {
+    const local = latestLobby?.players.find((p) => p.id === localPlayerId);
+    const nextReady = local ? !local.ready : true;
+    callbacks.onSetReady?.(nextReady);
+  });
+
+  lobbyLeaveButton.addEventListener('click', () => {
+    callbacks.onLeave();
   });
 
   const renderRooms = (rooms: RoomSummary[]): void => {
@@ -1548,8 +1675,15 @@ export function createHud(callbacks: HudCallbacks): Hud {
       titleRow.appendChild(
         createElement(
           'span',
+          `room-card__mode-tag mode-tag--${room.roomMode ?? '1v1'}`,
+          room.roomMode === '2v2' ? '2 VS 2' : '1 VS 1',
+        ),
+      );
+      titleRow.appendChild(
+        createElement(
+          'span',
           `room-card__badge badge--${room.mode}`,
-          room.mode === 'buy' ? 'ЭКОНОМИКА · C4' : 'АРЕНА 1V1',
+          room.mode === 'buy' ? 'ЭКОНОМИКА · C4' : 'АРЕНА',
         ),
       );
       info.appendChild(titleRow);
@@ -1561,7 +1695,7 @@ export function createHud(callbacks: HudCallbacks): Hud {
         createElement(
           'span',
           `room-card__status ${isFull ? 'is-full' : 'is-waiting'}`,
-          isFull ? 'Матч идёт' : 'Ожидание соперника',
+          isFull ? 'Матч заполнен' : 'Ожидание игроков',
         ),
       );
       info.appendChild(metaRow);
@@ -1884,23 +2018,60 @@ export function createHud(callbacks: HudCallbacks): Hud {
       renderLobbyPlayers(state);
       const pause = state.phase === 'paused';
       setOverlayVisible(lobbyOverlay, state.phase === 'lobby' || pause);
-      setText(
-        lobbyTitle,
-        pause ? 'Матч на паузе' : state.players.length < 2 ? 'Ожидание соперника' : 'Готовность',
-      );
-      setText(
-        lobbyStatus,
-        pause
-          ? 'Соединение с одним из игроков потеряно. Матч продолжится после возвращения.'
-          : state.players.length < 2
+      if (pause) {
+        setText(lobbyTitle, 'Матч на паузе');
+        setText(
+          lobbyStatus,
+          'Соединение с одним из игроков потеряно. Ожидание 60 сек до продолжения.',
+        );
+      } else if (state.roomMode === '2v2') {
+        const readyCount = state.players.filter((p) => p.ready).length;
+        if (state.players.length < 4) {
+          setText(lobbyTitle, `Ожидание игроков (${state.players.length}/4)`);
+          setText(
+            lobbyStatus,
+            'Займите сторону (T или CT) и нажмите «ГОТОВ К ИГРЕ».',
+          );
+        } else {
+          setText(lobbyTitle, `Готовность участников (${readyCount}/4)`);
+          setText(
+            lobbyStatus,
+            readyCount === 4
+              ? 'Все игроки готовы! Старт...'
+              : 'Для начала матча все 4 игрока должны нажать «ГОТОВ».',
+          );
+        }
+      } else {
+        setText(
+          lobbyTitle,
+          state.players.length < 2 ? 'Ожидание соперника' : 'Готовность',
+        );
+        setText(
+          lobbyStatus,
+          state.players.length < 2
             ? 'Откройте вторую вкладку или пригласите друга. Матч начнётся автоматически.'
             : 'Оба игрока на месте. Приготовьтесь.',
-      );
-      if (!pause) {
-        setText(
-          lobbyTimer,
-          state.players.length < 2 ? 'Матч начнётся автоматически' : 'Старт через несколько секунд',
         );
+      }
+      if (!pause) {
+        if (state.roomMode === '2v2') {
+          const readyCount = state.players.filter((p) => p.ready).length;
+          setText(
+            lobbyTimer,
+            state.players.length < 4
+              ? `Нужно 4 игрока (сейчас ${state.players.length}/4)`
+              : readyCount === 4
+                ? 'Запуск матча...'
+                : `Готовы: ${readyCount} из 4`,
+          );
+        } else {
+          setText(
+            lobbyTimer,
+            state.players.length < 2
+              ? 'Матч начнётся автоматически'
+              : 'Старт через несколько секунд',
+          );
+        }
       }
       if (state.phase === 'ended') {
         setOverlayVisible(lobbyOverlay, false);

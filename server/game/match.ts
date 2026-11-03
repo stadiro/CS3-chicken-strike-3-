@@ -137,7 +137,6 @@ const JUMP_BUFFER_MS = 150;
 const SPRAY_RESET_MS = 300;
 const PENDING_FIRE_TTL_MS = 250;
 
-const TEAM_ORDER: readonly Team[] = ['alpha', 'bravo'];
 const TEAM_RANK: Record<Team, number> = { alpha: 0, bravo: 1 };
 
 export function sanitizeName(raw: string): string {
@@ -1184,7 +1183,7 @@ export class Match {
     return null;
   }
 
-  chooseTeam(playerId: string, team: Team, now: number): boolean {
+  chooseTeam(playerId: string, team: Team, _now: number): boolean {
     const player = this.players.get(playerId);
     if (player === undefined) {
       return false;

@@ -147,7 +147,7 @@ export interface PlayerSnapshot {
   kills: number;
   deaths: number;
   connected: boolean;
-  ready: boolean;
+  ready?: boolean;
 }
 
 export interface PickupSnapshot {

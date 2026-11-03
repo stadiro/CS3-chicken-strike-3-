@@ -134,9 +134,9 @@ const hud = createHud({
       currentSession !== null && currentSession.name === name ? currentSession : null;
     void attemptJoin(name, sessionToUse, false, roomId);
   },
-  onCreateRoom: (name, mapId) => {
+  onCreateRoom: (name, mapId, roomMode) => {
     connection
-      .createRoom({ name, mapId })
+      .createRoom({ name, mapId, roomMode })
       .then((result) => {
         if (result.ok && result.roomId !== undefined) {
           hud.showCreateRoom(false);
@@ -149,6 +149,12 @@ const hud = createHud({
       .catch((err) => {
         hud.showToast(err instanceof Error ? err.message : 'Ошибка создания комнаты', 'error');
       });
+  },
+  onChooseTeam: (team) => {
+    connection.chooseTeam(team);
+  },
+  onSetReady: (ready) => {
+    connection.setReady(ready);
   },
   onRefreshRooms: () => {
     connection
