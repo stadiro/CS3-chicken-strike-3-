@@ -38,7 +38,13 @@ import {
   saveSettings,
   type GameSettings,
 } from '../settings';
-import { createCrosshairEditor, type CrosshairEditor } from './crosshairEditor';
+import {
+  DEFAULT_CROSSHAIR,
+  sanitizeCrosshairDraft,
+  type CrosshairPreset,
+} from '../../../shared/crosshair';
+import { loadCrosshairPreset, saveCrosshairPreset } from '../net/session';
+import { applyVisualStyles, createCrosshairEditor, type CrosshairEditor } from './crosshairEditor';
 
 const TEAM_LABEL: Record<Team, string> = { alpha: 'ALPHA', bravo: 'BRAVO' };
 const SIDE_LABEL: Record<Side, string> = { t: 'T', ct: 'CT' };
@@ -108,6 +114,7 @@ export interface Hud {
   showSettings(show: boolean): void;
   showPickup(weaponName: string): void;
   showBombPlanted(siteId: string): void;
+  hideBombAlert(): void;
   showRoundWin(winnerName: string, localWon: boolean, reason?: MatchEndReason): void;
   hideRoundWin(): void;
   showResults(event: RoundEndEvent, localPlayerId: string | null): void;
@@ -250,6 +257,20 @@ const HUD_TEMPLATE = `
   <div class="bomb-action" id="bomb-action" aria-live="polite">
     <div class="bomb-action__label" id="bomb-action-label"></div>
     <div class="bomb-action__bar" id="bomb-action-bar"><span id="bomb-action-fill"></span></div>
+  </div>
+  <div class="bomb-alert" id="bomb-alert" aria-live="polite">
+    <div class="bomb-alert__icon">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="5" y="4" width="14" height="16" rx="2"></rect>
+        <line x1="9" y1="8" x2="15" y2="8"></line>
+        <line x1="9" y1="12" x2="15" y2="12"></line>
+        <line x1="9" y1="16" x2="11" y2="16"></line>
+      </svg>
+    </div>
+    <div class="bomb-alert__text">
+      <span class="bomb-alert__title">БОМБА УСТАНОВЛЕНА</span>
+      <span class="bomb-alert__sub" id="bomb-alert-site">ТОЧКА A</span>
+    </div>
   </div>
   <div class="announcement" id="announcement"><span id="announcement-text"></span><small id="announcement-sub"></small></div>
   <div class="toast" id="toast"></div>
@@ -474,20 +495,78 @@ const HUD_TEMPLATE = `
 
   <div class="overlay overlay--settings" id="settings-overlay">
     <div class="panel panel--settings">
-      <div class="eyebrow">НАСТРОЙКИ <span>//</span> ЛОКАЛЬНО</div>
-      <h2>Комфорт</h2>
-      <p class="panel__lead">Настройки сохраняются в этом браузере. Клавиши не переназначаются; в бою блокируется часть браузерных сочетаний.</p>
-      <div class="settings-grid">
-        <label class="settings-field"><span>ЧУВСТВИТЕЛЬНОСТЬ</span><input id="setting-sensitivity" type="range" min="0.2" max="3" step="0.05" value="1" /><output id="setting-sensitivity-value">×1.00</output></label>
-        <label class="settings-field"><span>AWP ЧУВСТВИТЕЛЬНОСТЬ</span><input id="setting-awp-sensitivity" type="range" min="0.2" max="2" step="0.05" value="0.7" /><output id="setting-awp-sensitivity-value">×0.70</output></label>
-        <label class="settings-field"><span>УГОЛ ОБЗОРА</span><input id="setting-fov" type="range" min="60" max="110" step="1" value="78" /><output id="setting-fov-value">78°</output></label>
-        <label class="settings-field"><span>ОБЩАЯ ГРОМКОСТЬ</span><input id="setting-master-volume" type="range" min="0" max="1" step="0.05" value="0.7" /><output id="setting-master-volume-value">70%</output></label>
-        <label class="settings-field"><span>ЭФФЕКТЫ</span><input id="setting-effects-volume" type="range" min="0" max="1" step="0.05" value="0.8" /><output id="setting-effects-volume-value">80%</output></label>
-        <label class="settings-toggle"><input id="setting-toggle-walk" type="checkbox" /><span>Переключать тихий шаг</span></label>
-        <label class="settings-toggle"><input id="setting-toggle-scope" type="checkbox" checked /><span>Переключать прицел AWP</span></label>
+      <div class="eyebrow">НАСТРОЙКИ <span>//</span> В ИГРЕ</div>
+      <h2>Настройки матча</h2>
+      <p class="panel__lead">Настройки управления, звука и прицела сохраняются в браузере и применяются мгновенно во время боя.</p>
+      <div class="settings-columns">
+        <div class="settings-column">
+          <div class="settings-column__head"><span class="settings-column__title">УПРАВЛЕНИЕ И ЗВУК</span></div>
+          <div class="settings-grid">
+            <label class="settings-field"><span>ЧУВСТВИТЕЛЬНОСТЬ</span><input id="setting-sensitivity" type="range" min="0.2" max="3" step="0.05" value="1" /><output id="setting-sensitivity-value">×1.00</output></label>
+            <label class="settings-field"><span>AWP ЧУВСТВИТЕЛЬНОСТЬ</span><input id="setting-awp-sensitivity" type="range" min="0.2" max="2" step="0.05" value="0.7" /><output id="setting-awp-sensitivity-value">×0.70</output></label>
+            <label class="settings-field"><span>УГОЛ ОБЗОРА</span><input id="setting-fov" type="range" min="60" max="110" step="1" value="78" /><output id="setting-fov-value">78°</output></label>
+            <label class="settings-field"><span>ОБЩАЯ ГРОМКОСТЬ</span><input id="setting-master-volume" type="range" min="0" max="1" step="0.05" value="0.7" /><output id="setting-master-volume-value">70%</output></label>
+            <label class="settings-field"><span>ЭФФЕКТЫ</span><input id="setting-effects-volume" type="range" min="0" max="1" step="0.05" value="0.8" /><output id="setting-effects-volume-value">80%</output></label>
+            <label class="settings-toggle"><input id="setting-toggle-walk" type="checkbox" /><span>Переключать тихий шаг</span></label>
+            <label class="settings-toggle"><input id="setting-toggle-scope" type="checkbox" checked /><span>Переключать прицел AWP</span></label>
+          </div>
+        </div>
+
+        <div class="settings-column">
+          <div class="settings-column__head"><span class="settings-column__title">ПРИЦЕЛ</span></div>
+          <div class="settings-crosshair-preview">
+            <div class="crosshair-visual crosshair-visual--preview" id="in-game-crosshair-preview" data-style="dot">
+              <span class="crosshair__dot"></span>
+              <span class="crosshair__line crosshair__line--top"></span>
+              <span class="crosshair__line crosshair__line--right"></span>
+              <span class="crosshair__line crosshair__line--bottom"></span>
+              <span class="crosshair__line crosshair__line--left"></span>
+            </div>
+          </div>
+          <div class="settings-crosshair-controls">
+            <label class="settings-field">
+              <span>СТИЛЬ</span>
+              <select id="setting-crosshair-style" class="settings-select">
+                <option value="dot">ТОЧКА</option>
+                <option value="cross">КЛАССИЧЕСКИЙ КРЕСТ</option>
+                <option value="cross-dot">КРЕСТ С ТОЧКОЙ</option>
+                <option value="none">БЕЗ ПРИЦЕЛА</option>
+              </select>
+            </label>
+            <label class="settings-field settings-field--color">
+              <span>ЦВЕТ</span>
+              <input id="setting-crosshair-color" type="color" value="#5eead4" />
+            </label>
+            <label class="settings-field">
+              <span>ДЛИНА</span>
+              <input id="setting-crosshair-length" type="range" min="2" max="20" step="1" value="8" />
+              <output id="setting-crosshair-length-value">8 px</output>
+            </label>
+            <label class="settings-field">
+              <span>ТОЛЩИНА</span>
+              <input id="setting-crosshair-thickness" type="range" min="1" max="6" step="1" value="2" />
+              <output id="setting-crosshair-thickness-value">2 px</output>
+            </label>
+            <label class="settings-field">
+              <span>ЗАЗОР</span>
+              <input id="setting-crosshair-gap" type="range" min="0" max="14" step="1" value="4" />
+              <output id="setting-crosshair-gap-value">4 px</output>
+            </label>
+            <label class="settings-field">
+              <span>ТОЧКА</span>
+              <input id="setting-crosshair-dot-size" type="range" min="1" max="8" step="1" value="3" />
+              <output id="setting-crosshair-dot-size-value">3 px</output>
+            </label>
+            <label class="settings-field">
+              <span>ЯРКОСТЬ</span>
+              <input id="setting-crosshair-opacity" type="range" min="0.2" max="1" step="0.05" value="1" />
+              <output id="setting-crosshair-opacity-value">100%</output>
+            </label>
+          </div>
+        </div>
       </div>
       <div class="panel__actions">
-        <button class="button button--primary" id="settings-reset" type="button">СБРОСИТЬ</button>
+        <button class="button button--primary" id="settings-reset" type="button">СБРОСИТЬ ВСЁ</button>
         <button class="button button--ghost" id="settings-close" type="button">ЗАКРЫТЬ</button>
       </div>
     </div>
@@ -737,6 +816,48 @@ export function createHud(callbacks: HudCallbacks): Hud {
     root,
     'setting-effects-volume-value',
   );
+  const hudCrosshair = requireElement<HTMLDivElement>(root, 'crosshair');
+  const inGameCrosshairPreview = requireElement<HTMLDivElement>(root, 'in-game-crosshair-preview');
+  const settingCrosshairStyle = requireElement<HTMLSelectElement>(root, 'setting-crosshair-style');
+  const settingCrosshairColor = requireElement<HTMLInputElement>(root, 'setting-crosshair-color');
+  const settingCrosshairLength = requireElement<HTMLInputElement>(root, 'setting-crosshair-length');
+  const settingCrosshairThickness = requireElement<HTMLInputElement>(
+    root,
+    'setting-crosshair-thickness',
+  );
+  const settingCrosshairGap = requireElement<HTMLInputElement>(root, 'setting-crosshair-gap');
+  const settingCrosshairDotSize = requireElement<HTMLInputElement>(
+    root,
+    'setting-crosshair-dot-size',
+  );
+  const settingCrosshairOpacity = requireElement<HTMLInputElement>(
+    root,
+    'setting-crosshair-opacity',
+  );
+  const settingCrosshairLengthValue = requireElement<HTMLOutputElement>(
+    root,
+    'setting-crosshair-length-value',
+  );
+  const settingCrosshairThicknessValue = requireElement<HTMLOutputElement>(
+    root,
+    'setting-crosshair-thickness-value',
+  );
+  const settingCrosshairGapValue = requireElement<HTMLOutputElement>(
+    root,
+    'setting-crosshair-gap-value',
+  );
+  const settingCrosshairDotSizeValue = requireElement<HTMLOutputElement>(
+    root,
+    'setting-crosshair-dot-size-value',
+  );
+  const settingCrosshairOpacityValue = requireElement<HTMLOutputElement>(
+    root,
+    'setting-crosshair-opacity-value',
+  );
+
+  const bombAlert = requireElement<HTMLDivElement>(root, 'bomb-alert');
+  const bombAlertSite = requireElement<HTMLSpanElement>(root, 'bomb-alert-site');
+  let bombAlertTimer: number | undefined;
   const lobbyTitle = requireElement<HTMLHeadingElement>(root, 'lobby-title');
   const lobbyStatus = requireElement<HTMLParagraphElement>(root, 'lobby-status');
   const lobbyModeTag = requireElement<HTMLSpanElement>(root, 'lobby-mode-tag');
@@ -995,6 +1116,57 @@ export function createHud(callbacks: HudCallbacks): Hud {
     setText(settingEffectsVolumeValue, `${Math.round(settings.effectsVolume * 100)}%`);
   };
 
+  let currentCrosshair: CrosshairPreset = loadCrosshairPreset();
+
+  const updateCrosshairOutputs = (): void => {
+    setText(settingCrosshairLengthValue, `${settingCrosshairLength.value} px`);
+    setText(settingCrosshairThicknessValue, `${settingCrosshairThickness.value} px`);
+    setText(settingCrosshairGapValue, `${settingCrosshairGap.value} px`);
+    setText(settingCrosshairDotSizeValue, `${settingCrosshairDotSize.value} px`);
+    setText(
+      settingCrosshairOpacityValue,
+      `${Math.round(Number(settingCrosshairOpacity.value) * 100)}%`,
+    );
+  };
+
+  const renderCrosshairSettings = (): void => {
+    currentCrosshair = loadCrosshairPreset();
+    settingCrosshairStyle.value = currentCrosshair.style;
+    settingCrosshairColor.value = currentCrosshair.color;
+    settingCrosshairLength.value = String(currentCrosshair.length);
+    settingCrosshairThickness.value = String(currentCrosshair.thickness);
+    settingCrosshairGap.value = String(currentCrosshair.gap);
+    settingCrosshairDotSize.value = String(currentCrosshair.dotSize);
+    settingCrosshairOpacity.value = String(currentCrosshair.opacity);
+    updateCrosshairOutputs();
+    applyVisualStyles(inGameCrosshairPreview, currentCrosshair);
+    applyVisualStyles(hudCrosshair, currentCrosshair);
+  };
+
+  const readCrosshairSettings = (): void => {
+    const draft = sanitizeCrosshairDraft({
+      name: currentCrosshair.name,
+      style: settingCrosshairStyle.value,
+      color: settingCrosshairColor.value,
+      length: Number(settingCrosshairLength.value),
+      thickness: Number(settingCrosshairThickness.value),
+      gap: Number(settingCrosshairGap.value),
+      dotSize: Number(settingCrosshairDotSize.value),
+      opacity: Number(settingCrosshairOpacity.value),
+    });
+    if (draft === null) {
+      return;
+    }
+    currentCrosshair = {
+      ...currentCrosshair,
+      ...draft,
+    };
+    updateCrosshairOutputs();
+    applyVisualStyles(inGameCrosshairPreview, currentCrosshair);
+    applyVisualStyles(hudCrosshair, currentCrosshair);
+    saveCrosshairPreset(currentCrosshair);
+  };
+
   const readSettings = (): void => {
     settings = normalizeSettings({
       sensitivity: Number(settingSensitivity.value),
@@ -1015,6 +1187,7 @@ export function createHud(callbacks: HudCallbacks): Hud {
     settingsOverlay.setAttribute('aria-hidden', String(!show));
     if (show) {
       renderSettings();
+      renderCrosshairSettings();
     }
   };
 
@@ -1769,6 +1942,10 @@ export function createHud(callbacks: HudCallbacks): Hud {
     saveSettings(settings);
     renderSettings();
     callbacks.onSettingsChange(settings);
+
+    currentCrosshair = { ...DEFAULT_CROSSHAIR };
+    saveCrosshairPreset(currentCrosshair);
+    renderCrosshairSettings();
   });
   for (const input of [
     settingSensitivity,
@@ -1782,7 +1959,20 @@ export function createHud(callbacks: HudCallbacks): Hud {
     input.addEventListener('input', readSettings);
     input.addEventListener('change', readSettings);
   }
+  for (const input of [
+    settingCrosshairStyle,
+    settingCrosshairColor,
+    settingCrosshairLength,
+    settingCrosshairThickness,
+    settingCrosshairGap,
+    settingCrosshairDotSize,
+    settingCrosshairOpacity,
+  ]) {
+    input.addEventListener('input', readCrosshairSettings);
+    input.addEventListener('change', readCrosshairSettings);
+  }
   renderSettings();
+  renderCrosshairSettings();
 
   copyLinkButton.addEventListener('click', () => {
     const clipboard = navigator.clipboard;
@@ -1803,8 +1993,17 @@ export function createHud(callbacks: HudCallbacks): Hud {
       });
   });
 
+  const hideBombAlert = (): void => {
+    bombAlert.classList.remove('is-visible');
+    if (bombAlertTimer !== undefined) {
+      window.clearTimeout(bombAlertTimer);
+      bombAlertTimer = undefined;
+    }
+  };
+
   const hideRoundBanner = (): void => {
     roundBanner.classList.remove('is-visible', 'round-banner--win', 'round-banner--loss');
+    hideBombAlert();
   };
 
   const setBuyOpen = (show: boolean): void => {
@@ -2212,13 +2411,19 @@ export function createHud(callbacks: HudCallbacks): Hud {
       }
       const localSide =
         latestSnapshot?.players.find((candidate) => candidate.id === localPlayerId)?.side ?? null;
-      showAnnouncement(
-        'БОМБА УСТАНОВЛЕНА',
-        localSide === 't' ? `САЙТ ${siteId}` : 'ОБЕЗВРЕДЬТЕ C4',
-        'danger',
-        2400,
+      setText(
+        bombAlertSite,
+        localSide === 't' ? `ТОЧКА ${siteId} · ЗАЩИЩАЙТЕ БОМБУ` : `ТОЧКА ${siteId} · ОБЕЗВРЕДЬТЕ C4`,
       );
+      bombAlert.classList.add('is-visible');
+      if (bombAlertTimer !== undefined) {
+        window.clearTimeout(bombAlertTimer);
+      }
+      bombAlertTimer = schedule(() => {
+        bombAlert.classList.remove('is-visible');
+      }, 4500);
     },
+    hideBombAlert,
     showRoundWin: (winnerName, localWon, reason) => {
       if (disposed) {
         return;
@@ -2239,7 +2444,7 @@ export function createHud(callbacks: HudCallbacks): Hud {
           : reason === 'defuse'
             ? 'СПЕЦНАЗ ОБЕЗВРЕДИЛ C4'
             : localWon
-              ? 'ВЫ ВЫИГРАЛИ РАУНД'
+              ? 'ВАША КОМАНДА ВЫИГРАЛА РАУНД'
               : `${winnerName.length > 0 ? winnerName.toUpperCase() : 'СОПЕРНИК'} ЗАБИРАЕТ РАУНД`,
       );
       roundBanner.classList.toggle('round-banner--win', localWon);
@@ -2254,15 +2459,38 @@ export function createHud(callbacks: HudCallbacks): Hud {
       resultsEvent = event;
       setOverlayVisible(startOverlay, false);
       setOverlayVisible(scoreboardOverlay, false);
-      const won = event.winnerId !== null && event.winnerId === playerId;
-      const draw = event.winnerId === null;
+      const localTeam =
+        latestSnapshot?.players.find((candidate) => candidate.id === playerId)?.team ??
+        latestLobby?.players.find((candidate) => candidate.id === playerId)?.team ??
+        null;
+      const winnerTeam =
+        event.winnerId !== null
+          ? (latestSnapshot?.players.find((candidate) => candidate.id === event.winnerId)?.team ??
+             latestLobby?.players.find((candidate) => candidate.id === event.winnerId)?.team ??
+             null)
+          : null;
+
+      let won = false;
+      let draw = false;
+
+      if (localTeam !== null && winnerTeam !== null) {
+        won = localTeam === winnerTeam;
+        draw = false;
+      } else if (localTeam !== null) {
+        const enemyTeam = localTeam === 'alpha' ? 'bravo' : 'alpha';
+        won = event.scores[localTeam] > event.scores[enemyTeam];
+        draw = event.scores[localTeam] === event.scores[enemyTeam];
+      } else {
+        won = event.winnerId !== null && event.winnerId === playerId;
+        draw = event.winnerId === null && event.scores.alpha === event.scores.bravo;
+      }
       resultsTitle.classList.remove('is-win', 'is-lose', 'is-draw');
       resultsTitle.classList.add(won ? 'is-win' : draw ? 'is-draw' : 'is-lose');
       setText(resultsTitle, won ? 'ПОБЕДА' : draw ? 'НИЧЬЯ' : 'ПОРАЖЕНИЕ');
       setText(
         resultsSub,
         won
-          ? 'Вы контролировали арену.'
+          ? 'Ваша команда контролировала арену.'
           : draw
             ? 'Силы оказались равны.'
             : event.winnerName === null

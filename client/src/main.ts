@@ -5,6 +5,7 @@ import { FY_SAND_MAP, getMapById, type ArenaMap } from '../../shared/map';
 import { clamp, distance, type Vec3 } from '../../shared/math';
 import {
   type JoinRequest,
+  type LobbyState,
   type MatchPhase,
   type PlayerSnapshot,
   type RoundEndEvent,
@@ -103,6 +104,7 @@ let scopeRequested = false;
 let scopeRecoverUntil = 0;
 let latestLocalPlayer: PlayerSnapshot | null = null;
 let latestSnapshot: Snapshot | null = null;
+let latestLobby: LobbyState | null = null;
 let disposed = false;
 
 // Spectator state (economy rounds only). `logical` is what the spectator logic
@@ -276,6 +278,7 @@ connection.socket.on('rooms_update', (rooms) => {
 });
 
 connection.socket.on('lobby', (state) => {
+  latestLobby = state;
   currentPhase = state.phase;
   hud.updateLobby(state, localPlayerId);
   if (
@@ -473,7 +476,13 @@ connection.socket.on('kill', (event) => {
     localKillerName = event.killerId === event.victimId ? null : event.killerName;
   }
   if (event.killerId !== event.victimId && !isEconomyMode(latestSnapshot?.match.mode ?? 'arena')) {
-    hud.showRoundWin(event.killerName, event.killerId === localPlayerId);
+    const killerPlayer = latestSnapshot?.players.find((player) => player.id === event.killerId);
+    const localPlayer = latestSnapshot?.players.find((player) => player.id === localPlayerId);
+    const localWon =
+      killerPlayer && localPlayer
+        ? killerPlayer.team === localPlayer.team
+        : event.killerId === localPlayerId;
+    hud.showRoundWin(event.killerName, localWon);
   }
   if (event.killerId === localPlayerId) {
     sound.kill();
@@ -487,7 +496,13 @@ connection.socket.on('round_summary', (event) => {
   }
   hud.updateRoundStats(event, localPlayerId);
   if (isEconomyMode(latestSnapshot?.match.mode ?? 'arena') && event.winnerId !== null) {
-    hud.showRoundWin(event.winnerName ?? '', event.winnerId === localPlayerId, event.reason);
+    const winningPlayer = event.players.find((player) => player.playerId === event.winnerId);
+    const localPlayerStats = event.players.find((player) => player.playerId === localPlayerId);
+    const localWon =
+      winningPlayer && localPlayerStats
+        ? winningPlayer.team === localPlayerStats.team
+        : event.winnerId === localPlayerId;
+    hud.showRoundWin(event.winnerName ?? '', localWon, event.reason);
   }
 });
 
@@ -518,9 +533,11 @@ connection.socket.on('bomb_event', (event) => {
     }
   } else if (event.kind === 'defused') {
     sound.bombDefused();
+    hud.hideBombAlert();
     nextBombBeepAt = 0;
   } else if (event.kind === 'exploded') {
     sound.bombExplosion(dist);
+    hud.hideBombAlert();
     effects.spawnExplosion(event.position, 0xff4d2e);
     if (dist < BOMB.explosionRadius * 1.4) {
       cameraShake = Math.min(0.16, cameraShake + 0.08);
@@ -741,6 +758,7 @@ function leaveGame(): void {
   lastLocalWeapon = null;
   latestLocalPlayer = null;
   latestSnapshot = null;
+  latestLobby = null;
   currentPhase = 'lobby';
   resultsVisible = false;
   scopeRequested = false;
@@ -766,6 +784,24 @@ function leaveGame(): void {
   scoreboardVisible = false;
 }
 
+function isLocalVictory(winnerId: string | null): boolean {
+  if (winnerId === null) {
+    return false;
+  }
+  if (winnerId === localPlayerId) {
+    return true;
+  }
+  const localTeam =
+    latestSnapshot?.players.find((player) => player.id === localPlayerId)?.team ??
+    latestLobby?.players.find((player) => player.id === localPlayerId)?.team ??
+    null;
+  const winnerTeam =
+    latestSnapshot?.players.find((player) => player.id === winnerId)?.team ??
+    latestLobby?.players.find((player) => player.id === winnerId)?.team ??
+    null;
+  return localTeam !== null && winnerTeam !== null && localTeam === winnerTeam;
+}
+
 function presentResults(event: RoundEndEvent): void {
   if (resultsVisible) {
     return;
@@ -776,7 +812,7 @@ function presentResults(event: RoundEndEvent): void {
   wasReloadingUntil = null;
   hud.hideRoundWin();
   hud.showResults(event, localPlayerId);
-  sound.roundEnd(event.winnerId !== null && event.winnerId === localPlayerId);
+  sound.roundEnd(isLocalVictory(event.winnerId));
   input.setEnabled(false);
   input.releasePointerLock();
   viewmodel.setVisible(false);

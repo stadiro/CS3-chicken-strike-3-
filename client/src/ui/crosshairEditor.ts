@@ -29,7 +29,7 @@ function setText(element: Element, text: string): void {
   }
 }
 
-function applyVisualStyles(element: HTMLElement, preset: CrosshairPreset): void {
+export function applyVisualStyles(element: HTMLElement, preset: CrosshairPreset): void {
   element.dataset.style = preset.style;
   element.style.setProperty('--ch-color', preset.color);
   element.style.setProperty('--ch-length', `${preset.length}px`);
