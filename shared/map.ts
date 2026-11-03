@@ -1397,7 +1397,7 @@ function buildDust2Arena(): ArenaMap {
   );
   addBox('b-b3-crate', vec3(-21.8, 1.2, -23.4), vec3(-19.8, 2.55, -21.4), DUST2.crateTarp, 'crate');
 
-  // East wall of Bombsite B with angled ДВЕРИ B and raised/shifted ОКНО B (z: -26.8 .. -23.8, y = 2.85)
+  // East wall of Bombsite B with angled ДВЕРИ B and raised/narrowed ОКНО B (z: -26.8 .. -24.8, y = 3.55)
   addBox('b-east-wall-s', vec3(-16.3, 1.2, -13.6), vec3(-15.5, 7.6, -10), DUST2.wall, 'wall');
   addBox('b-doors-lintel', vec3(-16.3, 3.8, -16.8), vec3(-15.5, 7.6, -13.6), DUST2.arch, 'wall');
   // Две створки одинаковой длины 1.51 м:
@@ -1406,40 +1406,40 @@ function buildDust2Arena(): ArenaMap {
   // Зазор при прямом просмотре и широкий S-образный проход (как в КС2: example1.png, example2.png)
   addBox('b-door-leaf-n', vec3(-16.81, 1.2, -16.8), vec3(-15.84, 3.8, -15.49), DUST2.door, 'crate');
   addBox('b-door-leaf-s', vec3(-15.96, 1.2, -14.91), vec3(-14.99, 3.8, -13.6), DUST2.door, 'crate');
-  addBox('b-east-wall-mid', vec3(-16.3, 1.2, -23.8), vec3(-15.5, 7.6, -16.8), DUST2.wall, 'wall');
+  addBox('b-east-wall-mid', vec3(-16.3, 1.2, -24.8), vec3(-15.5, 7.6, -16.8), DUST2.wall, 'wall');
   addBox(
     'b-window-sill',
     vec3(-16.3, 1.2, -26.8),
-    vec3(-15.5, 2.85, -23.8),
+    vec3(-15.5, 3.55, -24.8),
     DUST2.wallBrick,
     'wall',
   );
-  addBox('b-window-lintel', vec3(-16.3, 4.85, -26.8), vec3(-15.5, 7.6, -23.8), DUST2.arch, 'wall');
+  addBox('b-window-lintel', vec3(-16.3, 5.45, -26.8), vec3(-15.5, 7.6, -24.8), DUST2.arch, 'wall');
   addBox(
     'b-win-step-ct-low',
-    vec3(-15.5, 1.2, -25.0),
-    vec3(-13.9, 1.75, -23.6),
+    vec3(-15.5, 1.2, -24.8),
+    vec3(-13.9, 1.95, -23.2),
     DUST2.crate,
     'platform',
   );
   addBox(
     'b-win-step-ct-high',
     vec3(-15.5, 1.2, -26.8),
-    vec3(-13.9, 2.25, -25.0),
+    vec3(-13.9, 2.70, -24.8),
     DUST2.crate,
     'platform',
   );
   addBox(
     'b-win-step-b-low',
-    vec3(-17.9, 1.2, -25.0),
-    vec3(-16.3, 1.75, -23.6),
+    vec3(-17.9, 1.2, -24.8),
+    vec3(-16.3, 1.95, -23.2),
     DUST2.crate,
     'platform',
   );
   addBox(
     'b-win-step-b-high',
     vec3(-17.9, 1.2, -26.8),
-    vec3(-16.3, 2.25, -25.0),
+    vec3(-16.3, 2.70, -24.8),
     DUST2.crate,
     'platform',
   );
