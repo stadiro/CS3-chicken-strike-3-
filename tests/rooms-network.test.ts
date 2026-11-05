@@ -122,9 +122,9 @@ describe('multi-room networking', () => {
 
     await Promise.all([waitForConnect(client1), waitForConnect(client2), waitForConnect(client3)]);
 
-    // Check initial room list (has default room)
+    // Check initial room list (no rooms until someone creates one)
     const initialRooms = await listRooms(client1);
-    expect(initialRooms.length).toBeGreaterThanOrEqual(1);
+    expect(initialRooms.length).toBe(0);
 
     // Client 1 creates a new Dust2 room
     const created1 = await createRoom(client1, {

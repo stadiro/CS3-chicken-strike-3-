@@ -195,7 +195,7 @@ function registerSocketHandlers(io: GameSocketServer, runtime: Runtime): void {
       tickRate: defaultRoom?.match.config.tickRate ?? 30,
       serverTime: Date.now(),
       mapId: defaultRoom?.map.id ?? 'fy_sand',
-      mapName: defaultRoom?.map.name ?? 'FY_SAND',
+      mapName: defaultRoom?.map.name ?? 'fy_sand',
       mode: defaultRoom?.match.getMode() ?? 'arena',
     };
     socket.emit('serverHello', hello);
@@ -613,12 +613,7 @@ export async function createGameServer(options: CreateGameServerOptions = {}): P
           matchOptions: options.matchOptions,
           isDefault: true,
         }
-      : {
-          id: 'default',
-          name: 'Основная игра',
-          mapId: 'fy_sand',
-          isDefault: true,
-        },
+      : undefined,
   );
   const runtime = createRuntime(io, rooms);
   registerSocketHandlers(io, runtime);
@@ -633,8 +628,8 @@ export async function createGameServer(options: CreateGameServerOptions = {}): P
   };
   app.use(errorHandler);
 
-  const defaultMatch = rooms.getDefaultRoom()!.match;
-  const tickMs = 1000 / defaultMatch.config.tickRate;
+  const tickRate = options.matchOptions?.config?.tickRate ?? 30;
+  const tickMs = 1000 / tickRate;
   let tickTimer: NodeJS.Timeout | null = null;
   let ticking = false;
   let nextTickAt = 0;
@@ -692,7 +687,16 @@ export async function createGameServer(options: CreateGameServerOptions = {}): P
     io,
     rooms,
     get match(): Match {
-      return rooms.getDefaultRoom()!.match;
+      let room = rooms.getDefaultRoom() ?? rooms.getAllRooms()[0];
+      if (!room) {
+        room = rooms.createRoom({
+          id: 'default',
+          name: 'Основная игра',
+          mapId: 'fy_sand',
+          isDefault: true,
+        });
+      }
+      return room.match;
     },
     listen: (port, host) =>
       new Promise<number>((resolve, reject) => {

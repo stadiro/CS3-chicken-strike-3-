@@ -83,19 +83,8 @@ export class RoomManager {
     if (this.defaultRoomId !== null) {
       return this.rooms.get(this.defaultRoomId);
     }
-    // Return first available room or create one
     const first = this.rooms.values().next().value;
-    if (first !== undefined) {
-      return first;
-    }
-    const created = this.createRoom({
-      id: 'default',
-      name: 'Основная игра',
-      mapId: DEFAULT_MAP_ID,
-      isDefault: true,
-    });
-    this.defaultRoomId = created.id;
-    return created;
+    return first;
   }
 
   findRoomForPlayer(playerId: string): GameRoom | undefined {

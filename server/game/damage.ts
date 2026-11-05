@@ -70,6 +70,7 @@ export function applyDamage(
     victim.armor = Math.max(0, victim.armor - armorDamage);
   }
 
+  const effectiveDamage = Math.min(victim.health, healthDamage);
   victim.health = Math.max(0, victim.health - healthDamage);
   victim.lastDamageAt = now;
   victim.lastAttackerId = attacker?.id ?? null;
@@ -85,7 +86,7 @@ export function applyDamage(
   }
 
   return {
-    damage: healthDamage,
+    damage: effectiveDamage,
     armorDamage,
     healthAfter: victim.health,
     armorAfter: victim.armor,

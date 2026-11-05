@@ -47,7 +47,6 @@ import { loadCrosshairPreset, saveCrosshairPreset } from '../net/session';
 import { applyVisualStyles, createCrosshairEditor, type CrosshairEditor } from './crosshairEditor';
 import { Radar } from './radar';
 
-const TEAM_LABEL: Record<Team, string> = { alpha: 'ALPHA', bravo: 'BRAVO' };
 const SIDE_LABEL: Record<Side, string> = { t: 'T', ct: 'CT' };
 const GRENADE_LABEL = {
   flashbang: 'ФЛЕШ',
@@ -77,7 +76,7 @@ const END_REASON: Record<RoundEndEvent['reason'], string> = {
 
 export interface HudCallbacks {
   onJoin(name: string, roomId?: string): void;
-  onCreateRoom(name: string, mapId: string, roomMode?: RoomGameMode): void;
+  onCreateRoom(name: string, mapId: string, roomMode?: RoomGameMode, playerName?: string): void;
   onRefreshRooms(): void;
   onChooseTeam?(team: Team): void;
   onSetReady?(ready: boolean): void;
@@ -215,29 +214,29 @@ const HUD_TEMPLATE = `
     <div class="round-banner__sub" id="round-banner-sub"></div>
   </div>
 
-  <header class="topbar">
-    <div class="team-panel team-panel--alpha" id="team-alpha">
-      <div class="team-panel__top">
-        <span class="team-panel__identity"><span class="team-panel__label" id="label-alpha">T</span><span class="team-panel__team">ALPHA</span></span>
-        <span class="team-panel__tag">ВАША КОМАНДА</span>
+  <header class="topbar cs2-topbar" id="cs2-topbar">
+    <div class="cs2-topbar__inner">
+      <div class="cs2-team cs2-team--ct">
+        <div class="cs2-team__players" id="cs2-players-ct"></div>
+        <div class="cs2-team__score-badge cs2-team__score-badge--ct">
+          <span class="cs2-team__score" id="score-ct">0</span>
+          <span class="cs2-team__label">CT</span>
+        </div>
       </div>
-      <div class="team-panel__score" id="score-alpha">0</div>
-      <div class="team-panel__bar"><span id="bar-alpha"></span></div>
-    </div>
 
-    <div class="match-clock" id="match-clock">
-      <div class="match-clock__phase" id="hud-phase">ЛОББИ</div>
-      <div class="match-clock__time" id="hud-time">10:00</div>
-      <div class="match-clock__limit" id="hud-fraglimit">ДО 13 РАУНДОВ</div>
-    </div>
-
-    <div class="team-panel team-panel--bravo" id="team-bravo">
-      <div class="team-panel__top">
-        <span class="team-panel__identity"><span class="team-panel__label" id="label-bravo">CT</span><span class="team-panel__team">BRAVO</span></span>
-        <span class="team-panel__tag">ВАША КОМАНДА</span>
+      <div class="match-clock cs2-clock" id="match-clock">
+        <div class="match-clock__time" id="hud-time">10:00</div>
+        <div class="match-clock__phase" id="hud-phase">ЛОББИ</div>
+        <div class="match-clock__limit" id="hud-fraglimit" style="display: none;">ДО 13 РАУНДОВ</div>
       </div>
-      <div class="team-panel__score" id="score-bravo">0</div>
-      <div class="team-panel__bar"><span id="bar-bravo"></span></div>
+
+      <div class="cs2-team cs2-team--t">
+        <div class="cs2-team__score-badge cs2-team__score-badge--t">
+          <span class="cs2-team__label">T</span>
+          <span class="cs2-team__score" id="score-t">0</span>
+        </div>
+        <div class="cs2-team__players" id="cs2-players-t"></div>
+      </div>
     </div>
 
     <div class="topbar__meta">
@@ -246,6 +245,9 @@ const HUD_TEMPLATE = `
       <span class="topbar__sep">/</span>
       <span id="hud-ping">PING —</span>
     </div>
+
+    <div id="team-alpha" style="display: none;"><span id="score-alpha">0</span><span id="bar-alpha"></span><span id="label-alpha"></span></div>
+    <div id="team-bravo" style="display: none;"><span id="score-bravo">0</span><span id="bar-bravo"></span><span id="label-bravo"></span></div>
   </header>
 
   <div class="radar-container" id="radar-container"></div>
@@ -781,6 +783,11 @@ export function createHud(callbacks: HudCallbacks): Hud {
   const barBravo = requireElement<HTMLSpanElement>(root, 'bar-bravo');
   const teamAlpha = requireElement<HTMLDivElement>(root, 'team-alpha');
   const teamBravo = requireElement<HTMLDivElement>(root, 'team-bravo');
+  const cs2Topbar = requireElement<HTMLElement>(root, 'cs2-topbar');
+  const scoreCt = requireElement<HTMLSpanElement>(root, 'score-ct');
+  const scoreT = requireElement<HTMLSpanElement>(root, 'score-t');
+  const cs2PlayersCt = requireElement<HTMLDivElement>(root, 'cs2-players-ct');
+  const cs2PlayersT = requireElement<HTMLDivElement>(root, 'cs2-players-t');
   const healthValue = requireElement<HTMLSpanElement>(root, 'health-value');
   const healthFill = requireElement<HTMLSpanElement>(root, 'health-fill');
   const armorValue = requireElement<HTMLSpanElement>(root, 'armor-value');
@@ -1249,6 +1256,93 @@ export function createHud(callbacks: HudCallbacks): Hud {
     }, duration);
   };
 
+  const renderCs2TeamCards = (
+    container: HTMLDivElement,
+    players: PlayerSnapshot[],
+    side: 'ct' | 't',
+    snapshot: Snapshot,
+  ): void => {
+    container.replaceChildren();
+    for (const player of players) {
+      const card = createElement('div', `cs2-player-card cs2-player-card--${side}`);
+      if (!player.alive) {
+        card.classList.add('is-dead');
+      }
+      if (player.id === localPlayerId) {
+        card.classList.add('is-you');
+      }
+
+      const avatar = createElement('div', 'cs2-player-card__avatar');
+      if (!player.alive) {
+        avatar.append(createElement('span', 'cs2-player-card__dead-icon', '✕'));
+      } else {
+        const hpBar = createElement('div', 'cs2-player-card__hp-bar');
+        const hpFill = createElement('span', 'cs2-player-card__hp-fill');
+        hpFill.style.height = `${clamp(player.health, 0, 100)}%`;
+        if (player.health <= 25) {
+          hpFill.classList.add('is-critical');
+        } else if (player.health <= 50) {
+          hpFill.classList.add('is-warning');
+        }
+        hpBar.append(hpFill);
+        avatar.append(hpBar);
+
+        if (side === 'ct' && player.defuseKit) {
+          const kitIcon = createElement('span', 'cs2-player-card__icon cs2-player-card__icon--kit', '✂');
+          kitIcon.title = 'Набор сапёра';
+          avatar.append(kitIcon);
+        }
+        if (side === 't' && snapshot.bomb?.carrierId === player.id) {
+          const bombIcon = createElement('span', 'cs2-player-card__icon cs2-player-card__icon--bomb', '💣');
+          bombIcon.title = 'Бомба C4';
+          avatar.append(bombIcon);
+        }
+      }
+
+      const nameSpan = createElement('span', 'cs2-player-card__name', player.name);
+      avatar.append(nameSpan);
+      card.append(avatar);
+
+      // Detailed dropdown for TAB
+      const dropdown = createElement('div', 'cs2-player-card__dropdown');
+      const moneyText = player.money !== undefined ? `$${player.money.toLocaleString()}` : '$0';
+      dropdown.append(createElement('div', 'cs2-dropdown__money', moneyText));
+
+      const weaponName = player.alive ? getWeapon(player.activeWeapon).name : '—';
+      dropdown.append(createElement('div', 'cs2-dropdown__weapon', weaponName));
+
+      const nadesDiv = createElement('div', 'cs2-dropdown__nades');
+      if (player.alive && player.grenades) {
+        for (const [type, count] of Object.entries(player.grenades)) {
+          if (count && count > 0) {
+            const shortName = type === 'he' ? 'HE' : type === 'flash' ? 'FB' : 'SG';
+            const badge = createElement(
+              'span',
+              `cs2-nade-tag cs2-nade-tag--${type}`,
+              count > 1 ? `${shortName}×${count}` : shortName,
+            );
+            nadesDiv.append(badge);
+          }
+        }
+      }
+      dropdown.append(nadesDiv);
+
+      const equipDiv = createElement('div', 'cs2-dropdown__equip');
+      if (player.alive) {
+        if (player.armor > 0) {
+          equipDiv.append(createElement('span', 'cs2-equip-badge', player.helmet ? '🛡️+H' : '🛡️'));
+        }
+        if (player.defuseKit) {
+          equipDiv.append(createElement('span', 'cs2-equip-badge cs2-equip-badge--kit', '🔧KIT'));
+        }
+      }
+      dropdown.append(equipDiv);
+
+      card.append(dropdown);
+      container.append(card);
+    }
+  };
+
   const updateScores = (snapshot: Snapshot): void => {
     const alpha = snapshot.match.scores.alpha;
     const bravo = snapshot.match.scores.bravo;
@@ -1268,6 +1362,16 @@ export function createHud(callbacks: HudCallbacks): Hud {
         ? `ДО ${snapshot.match.roundsToWin} ПОБЕД · РАУНД ${snapshot.match.round}`
         : `РАУНД ${snapshot.match.round} / ${snapshot.match.fragLimit}`,
     );
+
+    const ctTeam = sideForTeam('alpha') === 'ct' ? 'alpha' : 'bravo';
+    const tTeam = ctTeam === 'alpha' ? 'bravo' : 'alpha';
+    const ctScore = snapshot.match.scores[ctTeam] ?? 0;
+    const tScore = snapshot.match.scores[tTeam] ?? 0;
+    setText(scoreCt, String(ctScore));
+    setText(scoreT, String(tScore));
+
+    renderCs2TeamCards(cs2PlayersCt, snapshot.players.filter((p) => p.side === 'ct'), 'ct', snapshot);
+    renderCs2TeamCards(cs2PlayersT, snapshot.players.filter((p) => p.side === 't'), 't', snapshot);
   };
 
   const updateLocal = (snapshot: Snapshot): void => {
@@ -1665,15 +1769,18 @@ export function createHud(callbacks: HudCallbacks): Hud {
     scoreboardBody.replaceChildren();
     const statsFor = (playerId: string): RoundSummaryEvent['players'][number] | null =>
       latestRoundSummary?.players.find((player) => player.playerId === playerId) ?? null;
-    const teams: Team[] = ['alpha', 'bravo'];
+    const ctTeam = sideForTeam('alpha') === 'ct' ? 'alpha' : 'bravo';
+    const tTeam = ctTeam === 'alpha' ? 'bravo' : 'alpha';
+    const teams: Team[] = [ctTeam, tTeam];
     for (const team of teams) {
-      const column = createElement('div', `scoreboard-team scoreboard-team--${team}`);
+      const side = sideForTeam(team);
+      const column = createElement('div', `scoreboard-team scoreboard-team--${side}`);
       const head = createElement('div', 'scoreboard-team__head');
       head.append(
         createElement(
           'span',
           'scoreboard-team__label',
-          `${SIDE_LABEL[sideForTeam(team)]} · ${TEAM_LABEL[team]}`,
+          side === 'ct' ? 'COUNTER-TERRORISTS (CT)' : 'TERRORISTS (T)',
         ),
         createElement(
           'strong',
@@ -1839,7 +1946,7 @@ export function createHud(callbacks: HudCallbacks): Hud {
       'input[name="create-map-id"]:checked',
     );
     const mapId = selectedRadio?.value ?? 'de_dust2';
-    callbacks.onCreateRoom(roomName, mapId, roomMode);
+    callbacks.onCreateRoom(roomName, mapId, roomMode, name);
   });
 
   joinTeamAlphaBtn.addEventListener('click', () => {
@@ -2375,11 +2482,21 @@ export function createHud(callbacks: HudCallbacks): Hud {
       if (event.victimId === playerId) {
         entry.classList.add('is-local-death');
       }
-      const killer = createElement(
-        'span',
-        `killfeed__name killfeed__name--${event.killerId === playerId && event.killerId !== event.victimId ? 'you' : 'enemy'}`,
-        event.killerName,
-      );
+
+      const killerPlayer = latestSnapshot?.players.find((p) => p.id === event.killerId);
+      const victimPlayer = latestSnapshot?.players.find((p) => p.id === event.victimId);
+      const killerSide = killerPlayer?.side ?? (event.killerId === event.victimId ? victimPlayer?.side : null);
+      const victimSide = victimPlayer?.side ?? null;
+
+      const killerClasses = [
+        'killfeed__name',
+        killerSide ? `killfeed__name--${killerSide}` : '',
+        event.killerId === playerId && event.killerId !== event.victimId ? 'killfeed__name--you' : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
+
+      const killer = createElement('span', killerClasses, event.killerName);
       const weapon = createElement(
         'span',
         'killfeed__weapon',
@@ -2392,7 +2509,16 @@ export function createHud(callbacks: HudCallbacks): Hud {
       if (event.headshot) {
         weapon.append(createElement('b', 'killfeed__hs', 'HS'));
       }
-      const victim = createElement('span', 'killfeed__name', event.victimName);
+
+      const victimClasses = [
+        'killfeed__name',
+        victimSide ? `killfeed__name--${victimSide}` : '',
+        event.victimId === playerId ? 'killfeed__name--you' : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
+
+      const victim = createElement('span', victimClasses, event.victimName);
       entry.append(killer, weapon, victim);
       killfeed.prepend(entry);
       while (killfeed.children.length > 5) {
@@ -2557,6 +2683,7 @@ export function createHud(callbacks: HudCallbacks): Hud {
     },
     showScoreboard: (show) => {
       setOverlayVisible(scoreboardOverlay, show);
+      cs2Topbar.classList.toggle('is-tab-active', show);
       if (show) {
         renderScoreboard();
       }

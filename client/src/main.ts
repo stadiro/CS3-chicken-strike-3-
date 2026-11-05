@@ -137,14 +137,16 @@ const hud = createHud({
       currentSession !== null && currentSession.name === name ? currentSession : null;
     void attemptJoin(name, sessionToUse, false, roomId);
   },
-  onCreateRoom: (name, mapId, roomMode) => {
+  onCreateRoom: (roomName, mapId, roomMode, playerName) => {
+    const chosenName = playerName?.trim() || currentName || loadPlayerName() || 'Игрок';
+    currentName = chosenName;
+    savePlayerName(chosenName);
     connection
-      .createRoom({ name, mapId, roomMode })
+      .createRoom({ name: roomName, mapId, roomMode })
       .then((result) => {
         if (result.ok && result.roomId !== undefined) {
           hud.showCreateRoom(false);
-          const name = currentName || 'Игрок';
-          void attemptJoin(name, null, false, result.roomId);
+          void attemptJoin(chosenName, null, false, result.roomId);
         } else {
           hud.showToast(result.error ?? 'Ошибка создания комнаты', 'error');
         }

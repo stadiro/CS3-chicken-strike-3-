@@ -37,12 +37,12 @@ export class Radar {
   constructor(container: HTMLElement) {
     this.container = container;
     this.container.innerHTML = `
+      <div class="radar-frame" id="radar-frame">
+        <canvas class="radar-canvas" id="radar-canvas" width="420" height="420"></canvas>
+      </div>
       <div class="radar-callout" id="radar-callout">
         <span class="radar-callout__dot">●</span>
         <span class="radar-callout__text" id="radar-callout-text">DUST II</span>
-      </div>
-      <div class="radar-frame" id="radar-frame">
-        <canvas class="radar-canvas" id="radar-canvas" width="420" height="420"></canvas>
       </div>
     `;
 
