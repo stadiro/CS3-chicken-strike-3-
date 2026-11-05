@@ -8,6 +8,7 @@ const ACTION_KEYS = new Set([
   'Space',
   'KeyR',
   'KeyE',
+  'KeyF',
   'KeyG',
   'Digit1',
   'Digit2',
@@ -28,6 +29,7 @@ const GAMEPLAY_CODES = new Set([
   'KeyC',
   'KeyR',
   'KeyE',
+  'KeyF',
   'KeyG',
   'Digit1',
   'Digit2',
@@ -43,6 +45,8 @@ export interface InputControllerOptions {
   onSecondary?: (down: boolean) => void;
   /** Left mouse button pressed (used to cycle spectator targets). */
   onPrimary?: () => void;
+  /** Inspect weapon requested. */
+  onInspect?: () => void;
 }
 
 export class InputController {
@@ -256,6 +260,8 @@ export class InputController {
       this.reloadQueued = true;
     } else if (event.code === 'KeyE') {
       this.useQueued = true;
+    } else if (event.code === 'KeyF') {
+      this.options.onInspect?.();
     } else if (event.code === 'KeyG') {
       this.dropQueued = true;
     } else if (event.code === 'Digit1') {

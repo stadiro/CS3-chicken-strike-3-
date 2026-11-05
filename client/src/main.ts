@@ -204,6 +204,11 @@ const input = new InputController(arena.renderer.domElement, {
       cycleSpectator(1);
     }
   },
+  onInspect: () => {
+    if (joined && spectatorLogical === null && latestLocalPlayer?.alive) {
+      viewmodel.triggerInspect();
+    }
+  },
 });
 
 const disposeShortcutGuard = installBrowserShortcutGuard(

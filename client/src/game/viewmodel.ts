@@ -15,7 +15,7 @@ import {
   type Vector3,
   type WebGLRenderer,
 } from 'three';
-import type { WeaponId } from '../../../shared/weapons';
+import { getWeapon, type WeaponId } from '../../../shared/weapons';
 import { disposeObject3D } from './dispose';
 import { createWeaponModel, type WeaponModel } from './weaponModel';
 
@@ -43,6 +43,35 @@ const KNIFE_RIGHT_SLEEVE_POS: [number, number, number] = [0.19, -0.16, 0.23];
 const KNIFE_RIGHT_SLEEVE_ROT: [number, number, number] = [-0.35, 0.48, -0.22];
 
 const KNIFE_SLASH_DURATION = 0.3;
+
+type InspectCategory = 'knife' | 'pistol' | 'rifle' | 'grenade';
+
+function getInspectCategory(weaponId: WeaponId): InspectCategory {
+  if (weaponId === 'knife') {
+    return 'knife';
+  }
+  const definition = getWeapon(weaponId);
+  if (definition.slot === 'secondary') {
+    return 'pistol';
+  }
+  if (definition.slot === 'grenade') {
+    return 'grenade';
+  }
+  return 'rifle';
+}
+
+function getInspectDuration(category: InspectCategory): number {
+  switch (category) {
+    case 'knife':
+      return 2.2;
+    case 'pistol':
+      return 2.4;
+    case 'rifle':
+      return 2.6;
+    case 'grenade':
+      return 2.0;
+  }
+}
 
 export interface ViewmodelState {
   now: number;
@@ -76,6 +105,9 @@ export class Viewmodel {
   private boltBase: Vector3 | null = null;
   private knifeSlashTime = 0;
   private knifeSlashSide = 0;
+  private inspecting = false;
+  private inspectTimer = 0;
+  private inspectDuration = 2.2;
   private visible = true;
   private disposed = false;
 
@@ -152,6 +184,7 @@ export class Viewmodel {
       return;
     }
 
+    this.cancelInspect();
     this.weapon?.dispose();
     this.weapon = createWeaponModel(weaponId, 1);
     this.root.add(this.weapon.group);
@@ -168,7 +201,54 @@ export class Viewmodel {
     this.leftHand.visible = !isKnife;
     this.leftSleeve.visible = !isKnife;
 
-    if (isKnife) {
+    this.resetPose();
+  }
+
+  triggerFire(): void {
+    if (this.weaponId === 'knife') {
+      this.triggerKnifeSlash();
+      return;
+    }
+    this.cancelInspect();
+    this.recoil = Math.min(0.18, this.recoil + 0.055);
+    this.flashTime = 0.05;
+    this.flashMesh.rotation.z = Math.random() * Math.PI;
+  }
+
+  triggerKnifeSlash(): void {
+    this.cancelInspect();
+    this.knifeSlashTime = KNIFE_SLASH_DURATION;
+    this.knifeSlashSide = (this.knifeSlashSide + 1) % 2;
+    this.flashTime = 0;
+    this.flashMesh.visible = false;
+    this.flashLight.intensity = 0;
+    this.recoil = 0;
+  }
+
+  triggerInspect(): void {
+    if (this.weapon === null || this.weaponId === null) {
+      return;
+    }
+    const category = getInspectCategory(this.weaponId);
+    this.inspectDuration = getInspectDuration(category);
+    this.inspectTimer = 0;
+    this.inspecting = true;
+  }
+
+  cancelInspect(): void {
+    if (!this.inspecting) {
+      return;
+    }
+    this.inspecting = false;
+    this.inspectTimer = 0;
+    this.resetPose();
+  }
+
+  private resetPose(): void {
+    if (this.weapon === null) {
+      return;
+    }
+    if (this.weaponId === 'knife') {
       this.weapon.group.position.set(...KNIFE_BASE_POS);
       this.weapon.group.rotation.set(...KNIFE_BASE_ROT);
       this.rightHand.position.set(...KNIFE_RIGHT_HAND_POS);
@@ -189,25 +269,6 @@ export class Viewmodel {
     }
   }
 
-  triggerFire(): void {
-    if (this.weaponId === 'knife') {
-      this.triggerKnifeSlash();
-      return;
-    }
-    this.recoil = Math.min(0.18, this.recoil + 0.055);
-    this.flashTime = 0.05;
-    this.flashMesh.rotation.z = Math.random() * Math.PI;
-  }
-
-  triggerKnifeSlash(): void {
-    this.knifeSlashTime = KNIFE_SLASH_DURATION;
-    this.knifeSlashSide = (this.knifeSlashSide + 1) % 2;
-    this.flashTime = 0;
-    this.flashMesh.visible = false;
-    this.flashLight.intensity = 0;
-    this.recoil = 0;
-  }
-
   setVisible(visible: boolean): void {
     this.visible = visible;
     this.root.visible = visible;
@@ -223,6 +284,17 @@ export class Viewmodel {
       return;
     }
 
+    if (this.inspecting) {
+      if (state.reloading) {
+        this.cancelInspect();
+      } else {
+        this.inspectTimer += dt;
+        if (this.inspectTimer >= this.inspectDuration) {
+          this.cancelInspect();
+        }
+      }
+    }
+
     const isKnife = this.weaponId === 'knife';
     this.recoil = isKnife ? 0 : Math.max(0, this.recoil - dt * 0.9);
     this.switchOffset = Math.max(0, this.switchOffset - dt * 1.3);
@@ -235,9 +307,20 @@ export class Viewmodel {
     const reloadArc = state.reloading ? Math.sin(state.reloadProgress * Math.PI) : 0;
 
     if (isKnife) {
-      this.animateKnifeSlash(dt);
+      if (this.knifeSlashTime > 0) {
+        this.animateKnifeSlash(dt);
+      } else if (this.inspecting) {
+        this.animateKnifeInspect();
+      } else {
+        this.resetPose();
+      }
     } else {
       this.animateReloadParts(state.reloading ? state.reloadProgress : 0);
+      if (!state.reloading && this.inspecting) {
+        this.animateGunInspect();
+      } else if (!state.reloading) {
+        this.resetPose();
+      }
     }
 
     const slashThrust =
@@ -368,6 +451,174 @@ export class Viewmodel {
     );
   }
 
+  private animateKnifeInspect(): void {
+    if (this.weapon === null) {
+      return;
+    }
+    const p = Math.min(1, Math.max(0, this.inspectTimer / this.inspectDuration));
+    let dx = 0;
+    let dy = 0;
+    let dz = 0;
+    let rx = 0;
+    let ry = 0;
+    let rz = 0;
+
+    if (p < 0.45) {
+      const s = Math.sin((p / 0.45) * Math.PI);
+      dx = -0.015 * s;
+      dy = 0.035 * s;
+      dz = 0.02 * s;
+      rx = 0.15 * s;
+      ry = -0.35 * s;
+      rz = -0.55 * s;
+    } else if (p < 0.9) {
+      const s = Math.sin(((p - 0.45) / 0.45) * Math.PI);
+      dx = 0.012 * s;
+      dy = 0.025 * s;
+      dz = 0.02 * s;
+      rx = -0.12 * s;
+      ry = 0.28 * s;
+      rz = 0.45 * s;
+    }
+
+    this.weapon.group.position.set(
+      KNIFE_BASE_POS[0] + dx,
+      KNIFE_BASE_POS[1] + dy,
+      KNIFE_BASE_POS[2] + dz,
+    );
+    this.weapon.group.rotation.set(
+      KNIFE_BASE_ROT[0] + rx,
+      KNIFE_BASE_ROT[1] + ry,
+      KNIFE_BASE_ROT[2] + rz,
+    );
+
+    this.rightHand.position.set(
+      KNIFE_RIGHT_HAND_POS[0] + dx * 0.9,
+      KNIFE_RIGHT_HAND_POS[1] + dy * 0.9,
+      KNIFE_RIGHT_HAND_POS[2] + dz * 0.9,
+    );
+    this.rightHand.rotation.set(
+      KNIFE_RIGHT_HAND_ROT[0] + rx * 0.75,
+      KNIFE_RIGHT_HAND_ROT[1] + ry * 0.75,
+      KNIFE_RIGHT_HAND_ROT[2] + rz * 0.75,
+    );
+    this.rightSleeve.position.set(
+      KNIFE_RIGHT_SLEEVE_POS[0] + dx * 0.75,
+      KNIFE_RIGHT_SLEEVE_POS[1] + dy * 0.75,
+      KNIFE_RIGHT_SLEEVE_POS[2] + dz * 0.75,
+    );
+    this.rightSleeve.rotation.set(
+      KNIFE_RIGHT_SLEEVE_ROT[0] + rx * 0.6,
+      KNIFE_RIGHT_SLEEVE_ROT[1] + ry * 0.6,
+      KNIFE_RIGHT_SLEEVE_ROT[2] + rz * 0.6,
+    );
+  }
+
+  private animateGunInspect(): void {
+    if (this.weapon === null || this.weaponId === null) {
+      return;
+    }
+    const category = getInspectCategory(this.weaponId);
+    const p = Math.min(1, Math.max(0, this.inspectTimer / this.inspectDuration));
+    let dx = 0;
+    let dy = 0;
+    let dz = 0;
+    let rx = 0;
+    let ry = 0;
+    let rz = 0;
+
+    if (category === 'pistol') {
+      if (p < 0.48) {
+        const s = Math.sin((p / 0.48) * Math.PI);
+        dx = -0.04 * s;
+        dy = 0.055 * s;
+        dz = 0.05 * s;
+        rx = -0.12 * s;
+        ry = -0.32 * s;
+        rz = 0.55 * s;
+      } else if (p < 0.92) {
+        const s = Math.sin(((p - 0.48) / 0.44) * Math.PI);
+        dx = 0.03 * s;
+        dy = 0.04 * s;
+        dz = 0.035 * s;
+        rx = -0.08 * s;
+        ry = 0.25 * s;
+        rz = -0.42 * s;
+      }
+    } else if (category === 'grenade') {
+      const s = Math.sin(p * Math.PI);
+      dy = 0.045 * s;
+      dz = 0.04 * s;
+      ry = -0.25 * s;
+      rz = 0.45 * s;
+    } else {
+      if (p < 0.5) {
+        const s = Math.sin((p / 0.5) * Math.PI);
+        dx = -0.035 * s;
+        dy = 0.05 * s;
+        dz = 0.055 * s;
+        rx = -0.1 * s;
+        ry = -0.22 * s;
+        rz = 0.42 * s;
+      } else if (p < 0.92) {
+        const s = Math.sin(((p - 0.5) / 0.42) * Math.PI);
+        dx = 0.025 * s;
+        dy = 0.03 * s;
+        dz = 0.035 * s;
+        rx = -0.05 * s;
+        ry = 0.15 * s;
+        rz = -0.25 * s;
+      }
+    }
+
+    this.weapon.group.position.set(dx, dy, dz);
+    this.weapon.group.rotation.set(rx, ry, rz);
+
+    this.rightHand.position.set(
+      GUN_RIGHT_HAND_POS[0] + dx,
+      GUN_RIGHT_HAND_POS[1] + dy,
+      GUN_RIGHT_HAND_POS[2] + dz,
+    );
+    this.rightHand.rotation.set(
+      GUN_RIGHT_HAND_ROT[0] + rx * 0.8,
+      GUN_RIGHT_HAND_ROT[1] + ry * 0.8,
+      GUN_RIGHT_HAND_ROT[2] + rz * 0.8,
+    );
+
+    this.leftHand.position.set(
+      GUN_LEFT_HAND_POS[0] + dx,
+      GUN_LEFT_HAND_POS[1] + dy,
+      GUN_LEFT_HAND_POS[2] + dz,
+    );
+    this.leftHand.rotation.set(
+      GUN_LEFT_HAND_ROT[0] + rx * 0.8,
+      GUN_LEFT_HAND_ROT[1] + ry * 0.8,
+      GUN_LEFT_HAND_ROT[2] + rz * 0.8,
+    );
+
+    this.rightSleeve.position.set(
+      GUN_RIGHT_SLEEVE_POS[0] + dx * 0.8,
+      GUN_RIGHT_SLEEVE_POS[1] + dy * 0.8,
+      GUN_RIGHT_SLEEVE_POS[2] + dz * 0.8,
+    );
+    this.rightSleeve.rotation.set(
+      GUN_RIGHT_SLEEVE_ROT[0] + rx * 0.8,
+      GUN_RIGHT_SLEEVE_ROT[1] + ry * 0.8,
+      GUN_RIGHT_SLEEVE_ROT[2] + rz * 0.8,
+    );
+
+    this.leftSleeve.position.set(
+      GUN_LEFT_SLEEVE_POS[0] + dx * 0.8,
+      GUN_LEFT_SLEEVE_POS[1] + dy * 0.8,
+      GUN_LEFT_SLEEVE_POS[2] + dz * 0.8,
+    );
+    this.leftSleeve.rotation.set(
+      GUN_LEFT_SLEEVE_ROT[0] + rx * 0.8,
+      GUN_LEFT_SLEEVE_ROT[1] + ry * 0.8,
+      GUN_LEFT_SLEEVE_ROT[2] + rz * 0.8,
+    );
+  }
+
   private animateReloadParts(progress: number): void {
     const weapon = this.weapon;
     if (weapon === null) {
@@ -425,6 +676,7 @@ export class Viewmodel {
       return;
     }
     this.disposed = true;
+    this.cancelInspect();
     this.weapon?.dispose();
     disposeObject3D(this.scene);
   }

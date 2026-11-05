@@ -324,7 +324,7 @@ const HUD_TEMPLATE = `
     <div class="grenade-strip" id="grenade-strip"></div>
   </div>
 
-  <div class="hint-bar"><span><kbd>WASD</kbd> движение</span><span><kbd>ЛКМ</kbd> огонь</span><span><kbd>R</kbd> перезарядка</span><span><kbd>G</kbd> выброс</span><span><kbd>4</kbd> граната</span><span><kbd>B</kbd> магазин</span><span><kbd>SHIFT</kbd> тихий шаг</span><span><kbd>TAB</kbd> счёт</span><span><kbd>ESC</kbd> курсор</span></div>
+  <div class="hint-bar"><span><kbd>WASD</kbd> движение</span><span><kbd>ЛКМ</kbd> огонь</span><span><kbd>R</kbd> перезарядка</span><span><kbd>F</kbd> осмотр</span><span><kbd>G</kbd> выброс</span><span><kbd>4</kbd> граната</span><span><kbd>B</kbd> магазин</span><span><kbd>SHIFT</kbd> тихий шаг</span><span><kbd>TAB</kbd> счёт</span><span><kbd>ESC</kbd> курсор</span></div>
 
   <div class="connection-banner" id="connection-banner"><span class="status-dot status-dot--offline"></span><span id="connection-text">ПЕРЕПОДКЛЮЧЕНИЕ...</span></div>
 
@@ -363,6 +363,7 @@ const HUD_TEMPLATE = `
         <div><kbd>ЛКМ</kbd><span>огонь</span></div>
         <div><kbd>ПКМ</kbd><span>прицел AWP</span></div>
         <div><kbd>R</kbd><span>перезарядка</span></div>
+        <div><kbd>F</kbd><span>осмотр оружия</span></div>
         <div><kbd>E</kbd><span>подобрать / заменить</span></div>
         <div><kbd>G</kbd><span>выбросить оружие</span></div>
         <div><kbd>B</kbd><span>магазин / закупка</span></div>
