@@ -284,7 +284,7 @@ const HUD_TEMPLATE = `
     </div>
     <div class="bomb-alert__text">
       <span class="bomb-alert__title">БОМБА ЗАЛОЖЕНА</span>
-      <span class="bomb-alert__sub" id="bomb-alert-site">ТОЧКА A · ОБЕЗВРЕДЬТЕ БОМБУ</span>
+      <span class="bomb-alert__sub" id="bomb-alert-site">ОБЕЗВРЕДЬТЕ БОМБУ</span>
     </div>
   </div>
   <div class="announcement" id="announcement"><span id="announcement-text"></span><small id="announcement-sub"></small></div>
@@ -2605,7 +2605,7 @@ export function createHud(callbacks: HudCallbacks): Hud {
         latestSnapshot?.players.find((candidate) => candidate.id === localPlayerId)?.side ?? null;
       setText(
         bombAlertSite,
-        localSide === 't' ? `ТОЧКА ${siteId} · ЗАЩИЩАЙТЕ БОМБУ` : `ТОЧКА ${siteId} · ОБЕЗВРЕДЬТЕ БОМБУ`,
+        localSide === 't' ? `ТОЧКА ${siteId} · ЗАЩИЩАЙТЕ БОМБУ` : 'ОБЕЗВРЕДЬТЕ БОМБУ',
       );
       bombAlert.classList.add('is-visible');
       if (bombAlertTimer !== undefined) {
