@@ -142,6 +142,8 @@ export interface GrenadeState {
   position: Vec3;
   velocity: Vec3;
   fuseAt: number;
+  hasTouchedGround?: boolean;
+  groundTouchedAt?: number;
 }
 
 export interface AreaEffectState {

@@ -1567,9 +1567,35 @@ export class Match {
 
   private updateGrenades(now: number, dt: number): void {
     for (const grenade of [...this.grenades.values()]) {
-      if (now >= grenade.fuseAt) {
-        this.explodeGrenade(grenade, now);
-        continue;
+      if (grenade.type === 'smokegrenade') {
+        const groundHit = raycastMap(this.map, grenade.position, { x: 0, y: -1, z: 0 }, 0.35);
+        if (groundHit !== null && !grenade.hasTouchedGround) {
+          grenade.hasTouchedGround = true;
+          grenade.groundTouchedAt = now;
+        }
+
+        if (grenade.hasTouchedGround) {
+          const speed = Math.hypot(grenade.velocity.x, grenade.velocity.y, grenade.velocity.z);
+          const timeOnGround = now - (grenade.groundTouchedAt ?? now);
+          const shouldExplode =
+            (now >= grenade.fuseAt && (speed < 1.5 || timeOnGround > 500)) ||
+            timeOnGround >= 1500;
+          if (shouldExplode) {
+            if (groundHit !== null) {
+              grenade.position.y = groundHit.point.y + 0.1;
+            }
+            this.explodeGrenade(grenade, now);
+            continue;
+          }
+        } else if (now >= grenade.fuseAt + 12000) {
+          this.grenades.delete(grenade.id);
+          continue;
+        }
+      } else {
+        if (now >= grenade.fuseAt) {
+          this.explodeGrenade(grenade, now);
+          continue;
+        }
       }
 
       const old = { ...grenade.position };
@@ -1592,11 +1618,11 @@ export class Match {
         grenade.velocity.z *= -GRENADE.bounceDamping;
       }
 
-      this.moveGrenade(grenade, old, next);
+      this.moveGrenade(grenade, old, next, now);
     }
   }
 
-  private moveGrenade(grenade: GrenadeState, old: Vec3, next: Vec3): void {
+  private moveGrenade(grenade: GrenadeState, old: Vec3, next: Vec3, now: number): void {
     const radius = 0.13;
     const delta = sub(next, old);
     const travel = length(delta);
@@ -1655,6 +1681,12 @@ export class Match {
     if (normal.axis === 'y') {
       grenade.velocity.x *= 0.72;
       grenade.velocity.z *= 0.72;
+      if (normal.sign === 1) {
+        grenade.hasTouchedGround = true;
+        if (grenade.groundTouchedAt === undefined) {
+          grenade.groundTouchedAt = now;
+        }
+      }
     }
   }
 

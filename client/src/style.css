@@ -4243,7 +4243,7 @@ kbd {
 .cs2-team__players {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   padding: 4px 6px;
   min-height: 42px;
 }
@@ -4317,8 +4317,9 @@ kbd {
 
 .cs2-player-card {
   position: relative;
-  width: 46px;
-  height: 34px;
+  width: 64px;
+  height: 38px;
+  box-sizing: border-box;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 4px;
@@ -4404,7 +4405,7 @@ kbd {
   font-size: 8px;
   font-weight: 700;
   color: #e2e8f0;
-  max-width: 40px;
+  max-width: 56px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -4426,13 +4427,13 @@ kbd {
   display: none;
   position: absolute;
   top: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
-  width: 84px;
+  left: 0;
+  width: 100%;
+  box-sizing: border-box;
   background: rgba(10, 16, 26, 0.96);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 5px;
-  padding: 6px 5px;
+  padding: 6px 3px;
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.85);
   flex-direction: column;
   align-items: center;
