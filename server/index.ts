@@ -1,6 +1,6 @@
 import { createAdminServer, MIN_ADMIN_TOKEN_LENGTH, type AdminServer } from './adminServer';
 import { logger } from './logger';
-import { isLoopbackHost } from './network';
+import { getLanAddresses, isLoopbackHost } from './network';
 import { createGameServer } from './server';
 
 const DEFAULT_PORT = 3000;
@@ -84,6 +84,21 @@ async function main(): Promise<void> {
   try {
     await server.listen(port, host);
     gameReady = true;
+
+    const lan = getLanAddresses();
+    console.log('\n' + '='.repeat(58));
+    console.log('  🎮 WOW ARENA ЗАПУЩЕНА И ГОТОВА К ИГРЕ');
+    console.log('='.repeat(58));
+    console.log(`  👉 Этот компьютер:       http://localhost:${port}`);
+    if (lan.length > 0) {
+      for (const item of lan) {
+        console.log(`  👉 С другого ПК (${item.interfaceName}): http://${item.address}:${port}`);
+      }
+    }
+    console.log('-'.repeat(58));
+    console.log('  💡 Подсказка: если с другого ПК страница не открывается,');
+    console.log('     запустите один раз setup-firewall.bat от имени админа.');
+    console.log('='.repeat(58) + '\n');
     if (shuttingDown) {
       await server.close();
       return;

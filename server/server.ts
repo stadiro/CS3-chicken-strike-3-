@@ -508,6 +508,7 @@ async function attachClient(
     server: {
       middlewareMode: true,
       hmr: { server: httpServer },
+      allowedHosts: true,
     },
     appType: 'spa',
   });

@@ -8,6 +8,7 @@ export default defineConfig({
   publicDir: 'public',
   server: {
     host: '0.0.0.0',
+    allowedHosts: true,
     fs: {
       allow: [projectRoot],
     },
