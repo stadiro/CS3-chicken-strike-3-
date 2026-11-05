@@ -1,6 +1,7 @@
 import {
   BoxGeometry,
-  type BufferGeometry,
+  BufferAttribute,
+  BufferGeometry,
   CylinderGeometry,
   Group,
   Mesh,
@@ -250,25 +251,6 @@ function addTorus(
   return place(parent, geometry, material, position, rotation);
 }
 
-/** Cone/pyramid pointing towards -Z. */
-function addCone(
-  parent: Object3D,
-  radius: number,
-  length: number,
-  position: Vec3,
-  material: Material,
-  radialSegments: number,
-  scaleX = 1,
-): Mesh {
-  const geometry = sharedGeometry(
-    `cone:${radius}:${length}:${radialSegments}`,
-    () => new CylinderGeometry(0, radius, length, radialSegments),
-  );
-  const mesh = place(parent, geometry, material, position, [-Math.PI / 2, 0, 0]);
-  mesh.scale.x = scaleX;
-  return mesh;
-}
-
 /** Ring of small radial holes around a vertical body centred at (0, y, z). */
 function addRadialHoles(
   parent: Object3D,
@@ -377,6 +359,46 @@ interface Parts {
   bolt?: Group;
 }
 
+function buildKnifeTip(g: Group, material: Material): void {
+  const geometry = sharedGeometry('knife:tip:clippoint', () => {
+    const geom = new BufferGeometry();
+    const zStart = -0.28;
+    const zTip = -0.375;
+    const ySpine = 0.036;
+    const yEdge = -0.037;
+    const yTip = 0.005;
+    const halfW = 0.0045;
+
+    const vertices = new Float32Array([
+      // Left blade flat
+      -halfW, ySpine, zStart,
+      -halfW, yEdge, zStart,
+      0, yTip, zTip,
+
+      // Right blade flat
+      halfW, yEdge, zStart,
+      halfW, ySpine, zStart,
+      0, yTip, zTip,
+
+      // Top clip bevel
+      -halfW, ySpine, zStart,
+      0, yTip, zTip,
+      halfW, ySpine, zStart,
+
+      // Bottom cutting edge curve
+      -halfW, yEdge, zStart,
+      halfW, yEdge, zStart,
+      0, yTip, zTip,
+    ]);
+
+    geom.setAttribute('position', new BufferAttribute(vertices, 3));
+    geom.computeVertexNormals();
+    return geom;
+  });
+
+  place(g, geometry, material, [0, 0, 0]);
+}
+
 function buildKnife(g: Group, p: Palette, parts: Parts): void {
   // Handle with grip ridges, pommel and lanyard ring (+Z).
   addBox(g, [0.05, 0.072, 0.2], [0, -0.012, 0.1], p.polymer);
@@ -392,8 +414,8 @@ function buildKnife(g: Group, p: Palette, parts: Parts): void {
   addBox(g, [0.014, 0.024, 0.27], [0, 0.024, -0.145], p.blued);
   addBox(g, [0.008, 0.05, 0.27], [0, -0.012, -0.145], p.chrome);
   addBox(g, [0.016, 0.008, 0.16], [0, 0.005, -0.12], p.blued);
-  addCone(g, 0.038, 0.09, [0, 0.004, -0.325], p.chrome, 4, 0.22);
-  parts.muzzle.position.set(0, 0.0, -0.37);
+  buildKnifeTip(g, p.chrome);
+  parts.muzzle.position.set(0, 0.005, -0.375);
 }
 
 function buildPistolGrip(

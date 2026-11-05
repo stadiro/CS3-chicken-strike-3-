@@ -33,14 +33,14 @@ const GUN_RIGHT_HAND_ROT: [number, number, number] = [0.16, -0.12, 0.14];
 const GUN_RIGHT_SLEEVE_POS: [number, number, number] = [0.2, -0.28, 0.2];
 const GUN_RIGHT_SLEEVE_ROT: [number, number, number] = [0.16, -0.12, 0.14];
 
-// CS2 knife rest pose (held diagonally across screen pointing toward center):
-const KNIFE_BASE_POS: [number, number, number] = [0.02, -0.14, 0.02];
-const KNIFE_BASE_ROT: [number, number, number] = [-0.18, 1.32, -0.32];
+// CS2 knife rest pose (held diagonally across screen pointing toward center, elevated as in knifeiwant.png):
+const KNIFE_BASE_POS: [number, number, number] = [-0.03, 0.0, -0.03];
+const KNIFE_BASE_ROT: [number, number, number] = [-0.48, 1.22, -0.46];
 
-const KNIFE_RIGHT_HAND_POS: [number, number, number] = [0.11, -0.15, 0.06];
-const KNIFE_RIGHT_HAND_ROT: [number, number, number] = [-0.12, 0.45, -0.15];
-const KNIFE_RIGHT_SLEEVE_POS: [number, number, number] = [0.19, -0.25, 0.2];
-const KNIFE_RIGHT_SLEEVE_ROT: [number, number, number] = [-0.12, 0.45, -0.15];
+const KNIFE_RIGHT_HAND_POS: [number, number, number] = [0.09, -0.06, 0.08];
+const KNIFE_RIGHT_HAND_ROT: [number, number, number] = [-0.35, 0.48, -0.22];
+const KNIFE_RIGHT_SLEEVE_POS: [number, number, number] = [0.19, -0.16, 0.23];
+const KNIFE_RIGHT_SLEEVE_ROT: [number, number, number] = [-0.35, 0.48, -0.22];
 
 const KNIFE_SLASH_DURATION = 0.3;
 
