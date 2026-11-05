@@ -959,6 +959,8 @@ export function createHud(callbacks: HudCallbacks): Hud {
   let toastTimer: number | undefined;
   let damageTimer: number | undefined;
   let latestRoundSummary: RoundSummaryEvent | null = null;
+  let pendingRoundSummary: RoundSummaryEvent | null = null;
+  let lastSummaryAppliedRound = 0;
   let networkPing: number | null = null;
   let networkJitter = 0;
   let networkLoss = 0;
@@ -1263,7 +1265,11 @@ export function createHud(callbacks: HudCallbacks): Hud {
     snapshot: Snapshot,
   ): void => {
     container.replaceChildren();
+    const localPlayer = snapshot.players.find((p) => p.id === localPlayerId);
+    const isMyTeam = localPlayer !== undefined && localPlayer.side === side;
+
     for (const player of players) {
+      const isTeammate = isMyTeam || player.id === localPlayerId;
       const card = createElement('div', `cs2-player-card cs2-player-card--${side}`);
       if (!player.alive) {
         card.classList.add('is-dead');
@@ -1287,12 +1293,12 @@ export function createHud(callbacks: HudCallbacks): Hud {
         hpBar.append(hpFill);
         avatar.append(hpBar);
 
-        if (side === 'ct' && player.defuseKit) {
+        if (side === 'ct' && player.defuseKit && isTeammate) {
           const kitIcon = createElement('span', 'cs2-player-card__icon cs2-player-card__icon--kit', '✂');
           kitIcon.title = 'Набор сапёра';
           avatar.append(kitIcon);
         }
-        if (side === 't' && snapshot.bomb?.carrierId === player.id) {
+        if (side === 't' && snapshot.bomb?.carrierId === player.id && isTeammate) {
           const bombIcon = createElement('span', 'cs2-player-card__icon cs2-player-card__icon--bomb', '💣');
           bombIcon.title = 'Бомба C4';
           avatar.append(bombIcon);
@@ -1303,42 +1309,45 @@ export function createHud(callbacks: HudCallbacks): Hud {
       avatar.append(nameSpan);
       card.append(avatar);
 
-      // Detailed dropdown for TAB
-      const dropdown = createElement('div', 'cs2-player-card__dropdown');
-      const moneyText = player.money !== undefined ? `$${player.money.toLocaleString()}` : '$0';
-      dropdown.append(createElement('div', 'cs2-dropdown__money', moneyText));
+      // Detailed dropdown for TAB: ONLY for own team
+      if (isTeammate) {
+        const dropdown = createElement('div', 'cs2-player-card__dropdown');
+        const moneyText = player.money !== undefined ? `$${player.money.toLocaleString()}` : '$0';
+        dropdown.append(createElement('div', 'cs2-dropdown__money', moneyText));
 
-      const weaponName = player.alive ? getWeapon(player.activeWeapon).name : '—';
-      dropdown.append(createElement('div', 'cs2-dropdown__weapon', weaponName));
+        const weaponName = player.alive ? getWeapon(player.activeWeapon).name : '—';
+        dropdown.append(createElement('div', 'cs2-dropdown__weapon', weaponName));
 
-      const nadesDiv = createElement('div', 'cs2-dropdown__nades');
-      if (player.alive && player.grenades) {
-        for (const [type, count] of Object.entries(player.grenades)) {
-          if (count && count > 0) {
-            const shortName = type === 'he' ? 'HE' : type === 'flash' ? 'FB' : 'SG';
-            const badge = createElement(
-              'span',
-              `cs2-nade-tag cs2-nade-tag--${type}`,
-              count > 1 ? `${shortName}×${count}` : shortName,
-            );
-            nadesDiv.append(badge);
+        const nadesDiv = createElement('div', 'cs2-dropdown__nades');
+        if (player.alive && player.grenades) {
+          for (const [type, count] of Object.entries(player.grenades)) {
+            if (count && count > 0) {
+              const shortName = type === 'he' ? 'HE' : type === 'flash' ? 'FB' : 'SG';
+              const badge = createElement(
+                'span',
+                `cs2-nade-tag cs2-nade-tag--${type}`,
+                count > 1 ? `${shortName}×${count}` : shortName,
+              );
+              nadesDiv.append(badge);
+            }
           }
         }
-      }
-      dropdown.append(nadesDiv);
+        dropdown.append(nadesDiv);
 
-      const equipDiv = createElement('div', 'cs2-dropdown__equip');
-      if (player.alive) {
-        if (player.armor > 0) {
-          equipDiv.append(createElement('span', 'cs2-equip-badge', player.helmet ? '🛡️+H' : '🛡️'));
+        const equipDiv = createElement('div', 'cs2-dropdown__equip');
+        if (player.alive) {
+          if (player.armor > 0) {
+            equipDiv.append(createElement('span', 'cs2-equip-badge', player.helmet ? '🛡️+H' : '🛡️'));
+          }
+          if (player.defuseKit) {
+            equipDiv.append(createElement('span', 'cs2-equip-badge cs2-equip-badge--kit', '🔧KIT'));
+          }
         }
-        if (player.defuseKit) {
-          equipDiv.append(createElement('span', 'cs2-equip-badge cs2-equip-badge--kit', '🔧KIT'));
-        }
-      }
-      dropdown.append(equipDiv);
+        dropdown.append(equipDiv);
 
-      card.append(dropdown);
+        card.append(dropdown);
+      }
+
       container.append(card);
     }
   };
@@ -2355,6 +2364,8 @@ export function createHud(callbacks: HudCallbacks): Hud {
       }
       if (state.phase === 'lobby') {
         latestRoundSummary = null;
+        pendingRoundSummary = null;
+        lastSummaryAppliedRound = 0;
       }
       renderLobbyPlayers(state);
       const pause = state.phase === 'paused';
@@ -2431,6 +2442,17 @@ export function createHud(callbacks: HudCallbacks): Hud {
         snapshot.match.scores.bravo === 0
       ) {
         latestRoundSummary = null;
+        pendingRoundSummary = null;
+        lastSummaryAppliedRound = 1;
+      } else if (snapshot.match.phase === 'ended' && pendingRoundSummary !== null) {
+        latestRoundSummary = pendingRoundSummary;
+      } else if (
+        snapshot.match.round !== lastSummaryAppliedRound &&
+        (snapshot.match.phase === 'countdown' || snapshot.match.phase === 'live') &&
+        pendingRoundSummary !== null
+      ) {
+        latestRoundSummary = pendingRoundSummary;
+        lastSummaryAppliedRound = snapshot.match.round;
       }
       updateScores(snapshot);
       updatePhase(snapshot.match.phase);
@@ -2547,12 +2569,15 @@ export function createHud(callbacks: HudCallbacks): Hud {
       }, 850);
     },
     updateRoundStats: (event, playerId) => {
-      latestRoundSummary = event;
+      pendingRoundSummary = event;
       if (playerId !== null) {
         localPlayerId = playerId;
       }
-      if (isOverlayVisible(scoreboardOverlay)) {
-        renderScoreboard();
+      if (latestSnapshot?.match.phase === 'ended') {
+        latestRoundSummary = event;
+        if (isOverlayVisible(scoreboardOverlay)) {
+          renderScoreboard();
+        }
       }
     },
     showSettings,
