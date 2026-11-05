@@ -33,14 +33,14 @@ const GUN_RIGHT_HAND_ROT: [number, number, number] = [0.16, -0.12, 0.14];
 const GUN_RIGHT_SLEEVE_POS: [number, number, number] = [0.2, -0.28, 0.2];
 const GUN_RIGHT_SLEEVE_ROT: [number, number, number] = [0.16, -0.12, 0.14];
 
-// CS2 knife rest pose (held diagonally across screen):
-const KNIFE_BASE_POS: [number, number, number] = [-0.05, 0.03, 0.06];
-const KNIFE_BASE_ROT: [number, number, number] = [-0.22, -0.52, 0.44];
+// CS2 knife rest pose (held diagonally across screen pointing toward center):
+const KNIFE_BASE_POS: [number, number, number] = [0.02, -0.14, 0.02];
+const KNIFE_BASE_ROT: [number, number, number] = [-0.18, 1.32, -0.32];
 
-const KNIFE_RIGHT_HAND_POS: [number, number, number] = [0.03, -0.14, 0.12];
-const KNIFE_RIGHT_HAND_ROT: [number, number, number] = [-0.18, -0.42, 0.38];
-const KNIFE_RIGHT_SLEEVE_POS: [number, number, number] = [0.13, -0.24, 0.26];
-const KNIFE_RIGHT_SLEEVE_ROT: [number, number, number] = [-0.18, -0.42, 0.38];
+const KNIFE_RIGHT_HAND_POS: [number, number, number] = [0.11, -0.15, 0.06];
+const KNIFE_RIGHT_HAND_ROT: [number, number, number] = [-0.12, 0.45, -0.15];
+const KNIFE_RIGHT_SLEEVE_POS: [number, number, number] = [0.19, -0.25, 0.2];
+const KNIFE_RIGHT_SLEEVE_ROT: [number, number, number] = [-0.12, 0.45, -0.15];
 
 const KNIFE_SLASH_DURATION = 0.3;
 
@@ -286,51 +286,51 @@ export class Viewmodel {
         // Anticipation (windup): slight pull back & rotation preparation
         const p = progress / 0.15;
         const dir = this.knifeSlashSide === 0 ? 1 : -1;
-        dx = 0.03 * p * dir;
-        dy = 0.02 * p;
-        dz = 0.04 * p;
-        rx = -0.1 * p;
-        ry = 0.12 * p * dir;
-        rz = -0.1 * p * dir;
+        dx = 0.02 * p * dir;
+        dy = 0.01 * p;
+        dz = 0.03 * p;
+        rx = -0.08 * p;
+        ry = -0.15 * p * dir;
+        rz = 0.08 * p * dir;
       } else if (progress < 0.6) {
         // The slash swing arc (fast whip across screen)
         const p = (progress - 0.15) / 0.45; // 0 to 1
         const arc = Math.sin(p * Math.PI);
         if (this.knifeSlashSide === 0) {
           // Slash A: right-to-left downward cutting slash
-          dx = -0.22 * arc;
-          dy = -0.11 * arc;
-          dz = -0.16 * arc;
-          rx = 0.42 * arc;
-          ry = -0.65 * arc;
-          rz = 0.75 * arc;
+          dx = -0.14 * arc;
+          dy = -0.06 * arc;
+          dz = -0.12 * arc;
+          rx = 0.3 * arc;
+          ry = 0.35 * arc;
+          rz = -0.4 * arc;
         } else {
           // Slash B: left-to-right upward cutting slash
-          dx = 0.18 * arc;
-          dy = 0.09 * arc;
-          dz = -0.14 * arc;
-          rx = -0.32 * arc;
-          ry = 0.55 * arc;
-          rz = -0.65 * arc;
+          dx = 0.12 * arc;
+          dy = 0.08 * arc;
+          dz = -0.1 * arc;
+          rx = -0.25 * arc;
+          ry = -0.3 * arc;
+          rz = 0.35 * arc;
         }
       } else {
         // Recovery: smooth ease back to resting CS2 diagonal
         const p = (progress - 0.6) / 0.4;
         const decay = Math.pow(1 - p, 2);
         if (this.knifeSlashSide === 0) {
-          dx = -0.04 * decay;
-          dy = -0.02 * decay;
-          dz = -0.03 * decay;
-          rx = 0.08 * decay;
-          ry = -0.12 * decay;
-          rz = 0.14 * decay;
+          dx = -0.03 * decay;
+          dy = -0.01 * decay;
+          dz = -0.02 * decay;
+          rx = 0.06 * decay;
+          ry = 0.07 * decay;
+          rz = -0.08 * decay;
         } else {
-          dx = 0.03 * decay;
-          dy = 0.02 * decay;
-          dz = -0.03 * decay;
-          rx = -0.06 * decay;
-          ry = 0.1 * decay;
-          rz = -0.12 * decay;
+          dx = 0.02 * decay;
+          dy = 0.01 * decay;
+          dz = -0.02 * decay;
+          rx = -0.05 * decay;
+          ry = -0.06 * decay;
+          rz = 0.07 * decay;
         }
       }
     }
