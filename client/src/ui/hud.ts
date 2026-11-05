@@ -1,6 +1,6 @@
 import { BOMB } from '../../../shared/config';
 import { findBombSiteAt, type ArenaMap } from '../../../shared/map';
-import { clamp, distance } from '../../../shared/math';
+import { clamp, distance, type Vec3 } from '../../../shared/math';
 import {
   PROTOCOL_VERSION,
   type CountdownState,
@@ -45,6 +45,7 @@ import {
 } from '../../../shared/crosshair';
 import { loadCrosshairPreset, saveCrosshairPreset } from '../net/session';
 import { applyVisualStyles, createCrosshairEditor, type CrosshairEditor } from './crosshairEditor';
+import { Radar } from './radar';
 
 const TEAM_LABEL: Record<Team, string> = { alpha: 'ALPHA', bravo: 'BRAVO' };
 const SIDE_LABEL: Record<Side, string> = { t: 'T', ct: 'CT' };
@@ -128,6 +129,16 @@ export interface Hud {
   setBuyZoneNotice(show: boolean): void;
   showBuyResult(event: BuyResultEvent, playerId: string | null): void;
   setBlind(remainingMs: number): void;
+  updateRadar(
+    observer: PlayerSnapshot,
+    snapshot: Snapshot,
+    map: ArenaMap,
+    settings: GameSettings,
+  ): void;
+  registerRadarShot(pos: Vec3): void;
+  setRadarSpotted(enemyId: string, pos: Vec3): void;
+  markRadarLostSight(enemyId: string): void;
+  setRadarVisible(visible: boolean): void;
   /** Spectator info bar; null hides it and restores the local player's HUD. */
   setSpectator(state: SpectatorHudState | null): void;
   /** Black fade between spectator targets, 0..1. */
@@ -236,6 +247,8 @@ const HUD_TEMPLATE = `
       <span id="hud-ping">PING —</span>
     </div>
   </header>
+
+  <div class="radar-container" id="radar-container"></div>
 
   <div class="killfeed" id="killfeed" aria-live="polite"></div>
 
@@ -509,6 +522,9 @@ const HUD_TEMPLATE = `
             <label class="settings-field"><span>ЭФФЕКТЫ</span><input id="setting-effects-volume" type="range" min="0" max="1" step="0.05" value="0.8" /><output id="setting-effects-volume-value">80%</output></label>
             <label class="settings-toggle"><input id="setting-toggle-walk" type="checkbox" /><span>Переключать тихий шаг</span></label>
             <label class="settings-toggle"><input id="setting-toggle-scope" type="checkbox" checked /><span>Переключать прицел AWP</span></label>
+            <label class="settings-toggle"><input id="setting-radar-rotate" type="checkbox" checked /><span>Вращение радара</span></label>
+            <label class="settings-field"><span>РАЗМЕР РАДАРА</span><input id="setting-radar-scale" type="range" min="0.75" max="1.35" step="0.05" value="1" /><output id="setting-radar-scale-value">100%</output></label>
+            <label class="settings-field"><span>МАСШТАБ КАРТЫ</span><input id="setting-radar-zoom" type="range" min="0.7" max="1.4" step="0.05" value="1" /><output id="setting-radar-zoom-value">100%</output></label>
           </div>
         </div>
 
@@ -799,6 +815,13 @@ export function createHud(callbacks: HudCallbacks): Hud {
   const settingEffectsVolume = requireElement<HTMLInputElement>(root, 'setting-effects-volume');
   const settingToggleWalk = requireElement<HTMLInputElement>(root, 'setting-toggle-walk');
   const settingToggleScope = requireElement<HTMLInputElement>(root, 'setting-toggle-scope');
+  const settingRadarRotate = requireElement<HTMLInputElement>(root, 'setting-radar-rotate');
+  const settingRadarScale = requireElement<HTMLInputElement>(root, 'setting-radar-scale');
+  const settingRadarScaleValue = requireElement<HTMLOutputElement>(root, 'setting-radar-scale-value');
+  const settingRadarZoom = requireElement<HTMLInputElement>(root, 'setting-radar-zoom');
+  const settingRadarZoomValue = requireElement<HTMLOutputElement>(root, 'setting-radar-zoom-value');
+  const radarContainer = requireElement<HTMLDivElement>(root, 'radar-container');
+  const radar = new Radar(radarContainer);
   const settingSensitivityValue = requireElement<HTMLOutputElement>(
     root,
     'setting-sensitivity-value',
@@ -1109,11 +1132,17 @@ export function createHud(callbacks: HudCallbacks): Hud {
     settingEffectsVolume.value = String(settings.effectsVolume);
     settingToggleWalk.checked = settings.toggleWalk;
     settingToggleScope.checked = settings.toggleScope;
+    settingRadarRotate.checked = settings.radarRotate;
+    settingRadarScale.value = String(settings.radarScale);
+    settingRadarZoom.value = String(settings.radarZoom);
     setText(settingSensitivityValue, `×${settings.sensitivity.toFixed(2)}`);
     setText(settingAwpSensitivityValue, `×${settings.awpSensitivity.toFixed(2)}`);
     setText(settingFovValue, `${settings.fov}°`);
     setText(settingMasterVolumeValue, `${Math.round(settings.masterVolume * 100)}%`);
     setText(settingEffectsVolumeValue, `${Math.round(settings.effectsVolume * 100)}%`);
+    setText(settingRadarScaleValue, `${Math.round(settings.radarScale * 100)}%`);
+    setText(settingRadarZoomValue, `${Math.round(settings.radarZoom * 100)}%`);
+    radarContainer.style.transform = `scale(${settings.radarScale})`;
   };
 
   let currentCrosshair: CrosshairPreset = loadCrosshairPreset();
@@ -1176,6 +1205,9 @@ export function createHud(callbacks: HudCallbacks): Hud {
       effectsVolume: Number(settingEffectsVolume.value),
       toggleWalk: settingToggleWalk.checked,
       toggleScope: settingToggleScope.checked,
+      radarRotate: settingRadarRotate.checked,
+      radarScale: Number(settingRadarScale.value),
+      radarZoom: Number(settingRadarZoom.value),
     });
     saveSettings(settings);
     renderSettings();
@@ -1955,6 +1987,9 @@ export function createHud(callbacks: HudCallbacks): Hud {
     settingEffectsVolume,
     settingToggleWalk,
     settingToggleScope,
+    settingRadarRotate,
+    settingRadarScale,
+    settingRadarZoom,
   ]) {
     input.addEventListener('input', readSettings);
     input.addEventListener('change', readSettings);
@@ -2634,6 +2669,21 @@ export function createHud(callbacks: HudCallbacks): Hud {
     setSpectatorFade: (alpha) => {
       const value = clamp(alpha, 0, 1);
       spectatorFade.style.opacity = value <= 0.001 ? '0' : value.toFixed(3);
+    },
+    updateRadar: (observer, snapshot, map, activeSettings) => {
+      radar.update(observer, snapshot, map, activeSettings);
+    },
+    registerRadarShot: (pos) => {
+      radar.registerShot(pos);
+    },
+    setRadarSpotted: (enemyId, pos) => {
+      radar.setSpotted(enemyId, pos);
+    },
+    markRadarLostSight: (enemyId) => {
+      radar.markLostSight(enemyId);
+    },
+    setRadarVisible: (visible) => {
+      radar.setVisible(visible);
     },
     dispose: () => {
       if (disposed) {

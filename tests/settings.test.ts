@@ -34,6 +34,9 @@ describe('game settings', () => {
       effectsVolume: 2,
       toggleWalk: 'yes',
       toggleScope: true,
+      radarRotate: false,
+      radarScale: 2.5,
+      radarZoom: 0.1,
     });
     expect(settings.sensitivity).toBe(3);
     expect(settings.awpSensitivity).toBe(0.2);
@@ -42,6 +45,9 @@ describe('game settings', () => {
     expect(settings.effectsVolume).toBe(1);
     expect(settings.toggleWalk).toBe(DEFAULT_SETTINGS.toggleWalk);
     expect(settings.toggleScope).toBe(true);
+    expect(settings.radarRotate).toBe(false);
+    expect(settings.radarScale).toBe(1.4);
+    expect(settings.radarZoom).toBe(0.6);
   });
 
   it('falls back to defaults for missing or corrupt storage', () => {

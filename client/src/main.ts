@@ -12,6 +12,7 @@ import {
   type Snapshot,
 } from '../../shared/protocol';
 import { computeRecoilKick } from '../../shared/recoil';
+import { hasLineOfSight } from '../../shared/visibility';
 import { getWeapon, isScopedWeapon, type WeaponId } from '../../shared/weapons';
 import { SoundSystem } from './audio/sound';
 import { ArmorPickupView } from './game/armorPickupView';
@@ -446,6 +447,13 @@ connection.socket.on('shot', (event) => {
     const missDistance = distance(cameraPosition, closest);
     if (missDistance < 9) {
       sound.whiz(missDistance, panForPoint(closest));
+    }
+    if (event.weapon !== 'knife') {
+      const shooter = latestSnapshot?.players.find((player) => player.id === event.shooterId);
+      const observer = latestLocalPlayer;
+      if (shooter && observer && shooter.team !== observer.team) {
+        hud.registerRadarShot(event.from);
+      }
     }
   } else {
     viewmodel.triggerFire();
@@ -1753,6 +1761,48 @@ function renderLoop(now: number): void {
     lastHudTick = now;
     hud.tick(serverNow);
     hud.setNetwork(connection.getPingMs(), connection.getJitterMs(), connection.getLossPercent());
+  }
+
+  // Tactical Radar update with CS2 line-of-sight spotting
+  const radarObserver =
+    spectatorDisplayed?.kind === 'player' && sampled !== null
+      ? (sampled.players.find((player) => player.id === hiddenPlayerId) ?? latestLocalPlayer)
+      : (sampled?.local ?? latestLocalPlayer);
+
+  if (
+    radarObserver &&
+    latestSnapshot !== null &&
+    (currentPhase === 'live' || currentPhase === 'countdown' || currentPhase === 'round_over')
+  ) {
+    hud.setRadarVisible(true);
+
+    const activePlayers = sampled ? sampled.players : latestSnapshot.players;
+    const teammates = activePlayers.filter((p) => p.team === radarObserver.team && p.alive);
+    const enemies = activePlayers.filter((p) => p.team !== radarObserver.team && p.alive);
+
+    for (const enemy of enemies) {
+      let isSpotted = false;
+      for (const friendly of teammates) {
+        const eyeY = friendly.position.y + (friendly.crouching ? 1.05 : 1.65);
+        const eyePos = { x: friendly.position.x, y: eyeY, z: friendly.position.z };
+        const eyeYaw = friendly.id === localPlayerId ? arena.camera.rotation.y : friendly.yaw;
+
+        if (hasLineOfSight(currentMap, eyePos, eyeYaw, enemy.position)) {
+          isSpotted = true;
+          break;
+        }
+      }
+
+      if (isSpotted) {
+        hud.setRadarSpotted(enemy.id, enemy.position);
+      } else {
+        hud.markRadarLostSight(enemy.id);
+      }
+    }
+
+    hud.updateRadar(radarObserver, latestSnapshot, currentMap, settings);
+  } else {
+    hud.setRadarVisible(false);
   }
 
   clearCameraShake(dt);

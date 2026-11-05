@@ -6,6 +6,9 @@ export interface GameSettings {
   effectsVolume: number;
   toggleWalk: boolean;
   toggleScope: boolean;
+  radarRotate: boolean;
+  radarScale: number;
+  radarZoom: number;
 }
 
 export const DEFAULT_SETTINGS: GameSettings = {
@@ -16,6 +19,9 @@ export const DEFAULT_SETTINGS: GameSettings = {
   effectsVolume: 0.8,
   toggleWalk: false,
   toggleScope: true,
+  radarRotate: true,
+  radarScale: 1.0,
+  radarZoom: 1.0,
 };
 
 const STORAGE_KEY = 'wow-settings-v1';
@@ -46,6 +52,9 @@ export function normalizeSettings(value: unknown): GameSettings {
     effectsVolume: clampNumber(raw.effectsVolume, DEFAULT_SETTINGS.effectsVolume, 0, 1),
     toggleWalk: clampBoolean(raw.toggleWalk, DEFAULT_SETTINGS.toggleWalk),
     toggleScope: clampBoolean(raw.toggleScope, DEFAULT_SETTINGS.toggleScope),
+    radarRotate: clampBoolean(raw.radarRotate, DEFAULT_SETTINGS.radarRotate),
+    radarScale: clampNumber(raw.radarScale, DEFAULT_SETTINGS.radarScale, 0.7, 1.4),
+    radarZoom: clampNumber(raw.radarZoom, DEFAULT_SETTINGS.radarZoom, 0.6, 1.5),
   };
 }
 
