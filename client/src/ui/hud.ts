@@ -1283,16 +1283,20 @@ export function createHud(callbacks: HudCallbacks): Hud {
       if (!player.alive) {
         avatar.append(createElement('span', 'cs2-player-card__dead-icon', '✕'));
       } else {
-        const hpBar = createElement('div', 'cs2-player-card__hp-bar');
-        const hpFill = createElement('span', 'cs2-player-card__hp-fill');
-        hpFill.style.height = `${clamp(player.health, 0, 100)}%`;
-        if (player.health <= 25) {
-          hpFill.classList.add('is-critical');
-        } else if (player.health <= 50) {
-          hpFill.classList.add('is-warning');
+        // Only show HP bar for teammates (or pure spectators); enemies never display their HP bar
+        const showHp = isTeammate || localPlayer === undefined;
+        if (showHp) {
+          const hpBar = createElement('div', 'cs2-player-card__hp-bar');
+          const hpFill = createElement('span', 'cs2-player-card__hp-fill');
+          hpFill.style.height = `${clamp(player.health, 0, 100)}%`;
+          if (player.health <= 25) {
+            hpFill.classList.add('is-critical');
+          } else if (player.health <= 50) {
+            hpFill.classList.add('is-warning');
+          }
+          hpBar.append(hpFill);
+          avatar.append(hpBar);
         }
-        hpBar.append(hpFill);
-        avatar.append(hpBar);
 
         if (side === 'ct' && player.defuseKit && isTeammate) {
           const kitIcon = createElement('span', 'cs2-player-card__icon cs2-player-card__icon--kit', '✂');

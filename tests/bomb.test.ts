@@ -423,6 +423,7 @@ describe('bomb mode (C4)', () => {
 
     // Pause 10s into the fuse
     const pauseAt = plantEnd + 10_000;
+    match.pause(pauseAt);
     match.disconnect(bravo.id, pauseAt);
     expect(match.currentPhase).toBe('paused');
 

@@ -944,7 +944,7 @@ function openBuyMenu(): void {
   if (
     !joined ||
     buyMenuOpen ||
-    (currentPhase !== 'live' && currentPhase !== 'countdown') ||
+    (currentPhase !== 'live' && currentPhase !== 'countdown' && currentPhase !== 'paused') ||
     latestSnapshot === null ||
     !isEconomyMode(latestSnapshot.match.mode) ||
     latestLocalPlayer === null
@@ -1014,7 +1014,7 @@ function syncBuyMenu(snapshot: Snapshot): void {
 
 function updateBuyZoneNotice(snapshot: Snapshot): void {
   const local = snapshot.players.find((player) => player.id === localPlayerId);
-  const buyPhase = snapshot.match.phase === 'live' || snapshot.match.phase === 'countdown';
+  const buyPhase = snapshot.match.phase === 'live' || snapshot.match.phase === 'countdown' || snapshot.match.phase === 'paused';
   const buying =
     snapshot.match.buyEndsAt !== null && snapshot.match.buyEndsAt > snapshot.serverTime && buyPhase;
   const show =

@@ -457,6 +457,100 @@ export class Match {
       this.startNextRound(now);
     }
 
+    if (this.phase === 'countdown') {
+      this.cancelPlant(now);
+      this.cancelDefuse(now);
+      if (this.buyEndsAt !== null) {
+        const countdownRemaining =
+          this.countdownEndsAt !== null ? Math.max(0, this.countdownEndsAt - now) : 0;
+        this.pausedBuyRemainingMs = Math.max(0, this.buyEndsAt - now - countdownRemaining);
+      }
+      this.phase = 'paused';
+      this.countdownEndsAt = null;
+      this.roundOverEndsAt = null;
+      this.matchEndsAt = null;
+      this.buyEndsAt = null;
+      this.roundEndsAt = null;
+      this.pauseDeadline = now + this.config.reconnectWindowMs;
+      this.pauseStartedAt = now;
+      this.lastCountdownSecond = null;
+      this.emitLobby();
+      return;
+    }
+
+    if (this.phase === 'live') {
+      if (player.alive) {
+        if (this.bomb !== null && this.bomb.state === 'carried' && this.bomb.planterId === player.id) {
+          this.cancelPlant(now);
+        }
+        if (this.bomb !== null && this.bomb.defuserId === player.id) {
+          this.cancelDefuse(now);
+        }
+        player.alive = false;
+        player.health = 0;
+        player.velocity = { x: 0, y: 0, z: 0 };
+        player.scoped = false;
+        player.deaths += 1;
+        if (isEconomyMode(this.mode)) {
+          player.respawnAt = null;
+        }
+        this.dropInventoryOnDeath(player, now);
+
+        const killEvent: KillEvent = {
+          killerId: player.id,
+          killerName: 'Мир',
+          victimId: player.id,
+          victimName: player.name,
+          weapon: 'fall',
+          headshot: false,
+          at: now,
+        };
+        this.events.push({ type: 'kill', event: killEvent });
+
+        const scoreEvent: ScoreUpdate = {
+          scores: this.getScores(),
+          killerId: player.id,
+          victimId: player.id,
+          killerKills: player.kills,
+          victimDeaths: player.deaths,
+        };
+        this.events.push({ type: 'score_update', event: scoreEvent });
+
+        if (isEconomyMode(this.mode)) {
+          const players = this.getOrderedPlayers();
+          const aliveT = players.filter((p) => p.side === 't' && p.alive).length;
+          const aliveCT = players.filter((p) => p.side === 'ct' && p.alive).length;
+          if (aliveCT === 0) {
+            this.resolveRound(this.getTeamForSide('t'), 'frags', now);
+          } else if (aliveT === 0 && this.bomb?.state !== 'planted') {
+            this.resolveRound(this.getTeamForSide('ct'), 'frags', now);
+          }
+        } else {
+          const aliveAlpha = this.getPlayers().filter((p) => p.team === 'alpha' && p.alive).length;
+          const aliveBravo = this.getPlayers().filter((p) => p.team === 'bravo' && p.alive).length;
+          if (aliveAlpha === 0) {
+            this.roundWinnerTeam = 'bravo';
+            this.startRoundOver(now);
+          } else if (aliveBravo === 0) {
+            this.roundWinnerTeam = 'alpha';
+            this.startRoundOver(now);
+          }
+        }
+      }
+      this.emitLobby();
+      return;
+    }
+
+    if (this.phase === 'paused') {
+      this.pauseDeadline = now + this.config.reconnectWindowMs;
+      this.emitLobby();
+      return;
+    }
+
+    this.removePlayer(playerId, now, false);
+  }
+
+  pause(now: number): void {
     if (this.phase === 'live' || this.phase === 'countdown') {
       this.cancelPlant(now);
       this.cancelDefuse(now);
@@ -488,16 +582,7 @@ export class Match {
       this.pauseStartedAt = now;
       this.lastCountdownSecond = null;
       this.emitLobby();
-      return;
     }
-
-    if (this.phase === 'paused') {
-      this.pauseDeadline = now + this.config.reconnectWindowMs;
-      this.emitLobby();
-      return;
-    }
-
-    this.removePlayer(playerId, now, false);
   }
 
   leave(playerId: string, now: number): void {
@@ -812,7 +897,7 @@ export class Match {
   private canBuy(player: PlayerState, now: number): boolean {
     return (
       isEconomyMode(this.mode) &&
-      (this.phase === 'live' || this.phase === 'countdown') &&
+      (this.phase === 'live' || this.phase === 'countdown' || this.phase === 'paused') &&
       player.alive &&
       this.buyEndsAt !== null &&
       now < this.buyEndsAt &&
@@ -2211,6 +2296,21 @@ export class Match {
       this.resetPickups(now);
       this.resetArmorPickups();
       this.resetBomb();
+      const hasDisconnected = this.getPlayers().some((p) => !p.connected);
+      if (hasDisconnected) {
+        this.phase = 'paused';
+        this.countdownEndsAt = null;
+        this.roundOverEndsAt = null;
+        this.matchEndsAt = null;
+        this.buyEndsAt = now + BUY.buyTimeMs;
+        this.roundEndsAt = null;
+        this.pauseDeadline = now + this.config.reconnectWindowMs;
+        this.pauseStartedAt = now;
+        this.lastCountdownSecond = null;
+        this.emitLobby();
+        return;
+      }
+
       this.phase = 'countdown';
       this.countdownEndsAt = now + this.config.countdownMs;
       this.buyEndsAt = now + this.config.countdownMs + BUY.buyTimeMs;
@@ -2230,6 +2330,15 @@ export class Match {
     this.resetPickups(now);
     this.resetArmorPickups();
     this.resetBomb();
+
+    const hasDisconnected = this.getPlayers().some((p) => !p.connected);
+    if (hasDisconnected) {
+      this.phase = 'paused';
+      this.pauseDeadline = now + this.config.reconnectWindowMs;
+      this.pauseStartedAt = now;
+      this.emitLobby();
+      return;
+    }
 
     this.emitLobby();
   }

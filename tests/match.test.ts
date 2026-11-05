@@ -143,37 +143,40 @@ describe('match reconnect and pause', () => {
     expect(match.getPlayer(alphaId)?.connected).toBe(true);
 
     match.disconnect(alphaId, 1_260, 'socket-alpha-new');
+    expect(match.currentPhase).toBe('round_over');
+    match.tick(1_260 + 1_001, 1 / 30);
     expect(match.currentPhase).toBe('paused');
   });
 
-  it('pauses when a player disconnects and resumes after reconnect', () => {
+  it('pauses on next round when a player disconnects and resumes after reconnect', () => {
     const { match, alphaId, alpha } = createLiveMatch();
     if (alpha === undefined) {
       throw new Error('Missing alpha');
     }
-    const before = match.getSnapshot(1_200).match.timeRemainingMs;
     match.disconnect(alphaId, 1_200);
+    expect(match.currentPhase).toBe('round_over');
+    match.tick(1_200 + 1_001, 1 / 30);
     expect(match.currentPhase).toBe('paused');
-    expect(match.getLobbyState().pauseDeadline).toBe(6_200);
+    expect(match.getLobbyState().pauseDeadline).toBe(1_200 + 1_001 + 5_000);
 
     const resumed = match.join(
       'socket-alpha-new',
       { name: 'Alpha', playerId: alphaId, sessionToken: alpha.sessionToken },
-      1_250,
+      2_250,
     );
     expect(resumed.result.resumed).toBe(true);
     expect(match.currentPhase).toBe('countdown');
-    match.tick(1_301, 1 / 30);
+    match.tick(2_250 + 51, 1 / 30);
     expect(match.currentPhase).toBe('live');
-    expect(match.getSnapshot(1_302).match.timeRemainingMs).toBeLessThanOrEqual(before);
   });
 
   it('awards the match to the connected player after the reconnect window', () => {
-    const { match, alphaId, bravoId } = createLiveMatch({ reconnectWindowMs: 100 });
+    const { match, alphaId, bravoId } = createLiveMatch({ reconnectWindowMs: 100, roundResetMs: 50 });
     match.disconnect(alphaId, 1_200);
-    match.tick(1_201, 1 / 30);
+    expect(match.currentPhase).toBe('round_over');
+    match.tick(1_200 + 51, 1 / 30);
     expect(match.currentPhase).toBe('paused');
-    match.tick(1_301, 1 / 30);
+    match.tick(1_200 + 51 + 101, 1 / 30);
     expect(match.currentPhase).toBe('ended');
     expect(match.getLobbyState().winnerId).toBe(bravoId);
     expect(match.getLobbyState().endReason).toBe('abandon');

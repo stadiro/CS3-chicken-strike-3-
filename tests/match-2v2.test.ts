@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { getMapById } from '../shared/map';
 import { Match } from '../server/game/match';
 import { distance } from '../shared/math';
+import { BUY } from '../shared/economy';
 
 describe('Match 2v2 mode', () => {
   it('accepts up to 4 players and enforces 2 per team', () => {
@@ -161,16 +162,26 @@ describe('Match 2v2 mode', () => {
     match.tick(1_043 + 8_500, 1 / 30);
     expect(match.currentPhase).toBe('live');
 
-    // A2 disconnects
+    // A2 disconnects while A1 is alive: round continues in live, A2 dies
     match.disconnect(p3.player!.id, 10_000);
+    expect(match.currentPhase).toBe('live');
+    expect(match.getPlayer(p3.player!.id)?.alive).toBe(false);
+
+    // Round time expires without plant: CT wins round, round_over begins
+    const roundEnd = 1_043 + 8_500 + BUY.roundTimeMs + 1;
+    match.tick(roundEnd, 1 / 30);
+    expect(match.currentPhase).toBe('round_over');
+
+    // Round over ends (roundResetMs = 5s): next round begins in paused state waiting for A2
+    match.tick(roundEnd + 5_001, 1 / 30);
     expect(match.currentPhase).toBe('paused');
 
     // Fast-forward past reconnect window (60s)
-    match.tick(10_000 + 60_001, 1 / 30);
+    match.tick(roundEnd + 5_001 + 60_001, 1 / 30);
     expect(match.currentPhase).toBe('countdown');
 
     // Fast-forward countdown into live
-    match.tick(10_000 + 60_001 + 8_500, 1 / 30);
+    match.tick(roundEnd + 5_001 + 60_001 + 8_500, 1 / 30);
     expect(match.currentPhase).toBe('live');
     expect(match.getPlayers().length).toBe(3);
     expect(match.getPlayer(p3.player!.id)).toBeUndefined();
