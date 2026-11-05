@@ -2026,6 +2026,11 @@ export class Match {
       }
     }
 
+    victim.inventory.grenade = null;
+    victim.inventory.grenadeCounts = {};
+    victim.grenadeCounts = {};
+    cancelReload(victim);
+
     for (let index = 0; index < dropped.length; index += 1) {
       const weapon = dropped[index];
       if (weapon === undefined) {

@@ -103,6 +103,7 @@ export function resetPlayerForSpawn(
   const keptHelmet = preserveLoadout ? player.helmet : false;
   const keptKit = preserveLoadout ? player.defuseKit : false;
   const keptSlot = preserveLoadout ? player.activeSlot : 'secondary';
+  const keptGrenadeCounts = preserveLoadout ? player.grenadeCounts : {};
 
   player.position = { ...position };
   player.velocity = vec3();
@@ -124,6 +125,11 @@ export function resetPlayerForSpawn(
   player.jumpBufferUntil = 0;
   player.respawnAt = null;
   player.inventory = keptInventory ?? createDefaultInventory(player.side);
+  player.grenadeCounts = keptGrenadeCounts;
+  if (!preserveLoadout) {
+    player.inventory.grenade = null;
+    player.inventory.grenadeCounts = {};
+  }
   if (player.inventory[keptSlot] !== null || keptSlot === 'knife') {
     player.activeSlot = keptSlot;
   } else {

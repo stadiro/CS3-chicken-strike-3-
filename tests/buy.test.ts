@@ -324,6 +324,52 @@ describe('buy mode', () => {
     expect(fresh.getPlayer(shooterId)?.lossStreak).toBe(0);
   });
 
+  it('clears dropped grenades and inventory when a player dies and in the next round', () => {
+    const {
+      match: fresh,
+      alpha: shooter,
+      alphaId: shooterId,
+      bravoId: targetId,
+    } = createLiveMatch({ countdownMs: 50, roundResetMs: 100 });
+    const target = fresh.getPlayer(targetId);
+    if (target === undefined) {
+      throw new Error('Missing target');
+    }
+    target.money = 16_000;
+    expect(fresh.buy(targetId, 'hegrenade', 1_100)?.ok).toBe(true);
+    expect(fresh.buy(targetId, 'smokegrenade', 1_105)?.ok).toBe(true);
+    expect(getGrenadeCount(target, 'hegrenade')).toBe(1);
+    expect(getGrenadeCount(target, 'smokegrenade')).toBe(1);
+
+    shooter.position = vec3(0, 0, -4);
+    target.position = vec3(0, 0, 4);
+    target.health = 1;
+    target.armor = 0;
+    target.history = [];
+    addWeapon(shooter, 'ak47');
+    fresh.setInput(
+      shooterId,
+      makeInput({ seq: 1, clientTime: 1_200, yaw: Math.PI, pitch: -0.08, fire: true }),
+      1_200,
+    );
+    fresh.tick(1_200, 1 / 30);
+    expect(fresh.currentPhase).toBe('round_over');
+    expect(target.alive).toBe(false);
+    expect(getGrenadeCount(target, 'hegrenade')).toBe(0);
+    expect(getGrenadeCount(target, 'smokegrenade')).toBe(0);
+    expect(target.inventory.grenade).toBeNull();
+
+    // Advance into next round
+    fresh.tick(1_200 + 101, 1 / 30); // round_over ends -> countdown
+    fresh.tick(1_200 + 101 + 51, 1 / 30); // countdown ends -> live
+    expect(fresh.currentPhase).toBe('live');
+    expect(target.alive).toBe(true);
+    expect(target.inventory.primary).toBeNull();
+    expect(getGrenadeCount(target, 'hegrenade')).toBe(0);
+    expect(getGrenadeCount(target, 'smokegrenade')).toBe(0);
+    expect(target.inventory.grenade).toBeNull();
+  });
+
   it('swaps sides and resets money/loadout after twelve rounds', () => {
     const { match, alphaId, bravoId } = createLiveMatch();
     let now = 1_060;
