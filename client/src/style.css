@@ -856,20 +856,20 @@ body.is-ct .spectator-bar[data-mode='player'] .spectator-bar__name {
 
 .bomb-alert {
   position: fixed;
-  top: 76px;
+  top: 72px;
   left: 50%;
-  transform: translateX(-50%) translateY(-10px);
-  z-index: 34;
+  transform: translateX(-50%) translateY(-12px);
+  z-index: 70;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 8px 18px;
-  background: linear-gradient(180deg, rgba(34, 12, 12, 0.94) 0%, rgba(18, 8, 8, 0.98) 100%);
-  border: 1px solid rgba(239, 68, 68, 0.55);
+  padding: 9px 20px 9px 15px;
+  background: linear-gradient(180deg, rgba(36, 12, 12, 0.96) 0%, rgba(18, 8, 8, 0.98) 100%);
+  border: 1px solid rgba(239, 68, 68, 0.65);
   border-radius: 6px;
   box-shadow:
-    0 8px 24px rgba(0, 0, 0, 0.65),
-    0 0 16px rgba(239, 68, 68, 0.25);
+    0 10px 32px rgba(0, 0, 0, 0.8),
+    0 0 20px rgba(239, 68, 68, 0.35);
   opacity: 0;
   pointer-events: none;
   transition:
@@ -886,36 +886,52 @@ body.is-ct .spectator-bar[data-mode='player'] .spectator-bar__name {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 4px;
-  background: rgba(239, 68, 68, 0.2);
+  width: 32px;
+  height: 32px;
+  border-radius: 5px;
+  background: rgba(239, 68, 68, 0.22);
   color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.4);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.4);
+  animation: bomb-alert-pulse 1s infinite alternate ease-in-out;
+}
+
+@keyframes bomb-alert-pulse {
+  from {
+    transform: scale(1);
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.3);
+  }
+  to {
+    transform: scale(1.08);
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.85);
+  }
 }
 
 .bomb-alert__text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
 
 .bomb-alert__title {
   font-family: var(--font-display);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
   color: #fca5a5;
   text-transform: uppercase;
   line-height: 1.1;
+  text-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
 }
 
 .bomb-alert__sub {
   font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.12em;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
   color: #ffffff;
   line-height: 1.1;
+  text-transform: uppercase;
 }
 
 /* -------------------------------------------------------------- big center */

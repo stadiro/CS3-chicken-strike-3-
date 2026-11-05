@@ -81,6 +81,7 @@ const grenadeViews = new Map<string, GrenadeView>();
 const bombView = new BombView();
 arena.scene.add(bombView.root);
 let nextBombBeepAt = 0;
+let lastPlantedSite: string | null = null;
 
 let currentName = loadPlayerName();
 let currentSession: StoredSession | null = loadSession();
@@ -550,7 +551,8 @@ connection.socket.on('bomb_event', (event) => {
     if (dist <= BOMB.soundRadius) {
       sound.bombPlanted(dist, pan);
     }
-    hud.showBombPlanted(event.siteId ?? 'A');
+    lastPlantedSite = event.siteId ?? 'A';
+    hud.showBombPlanted(lastPlantedSite);
     nextBombBeepAt = 0;
   } else if (event.kind === 'defuse_started') {
     if (dist <= BOMB.soundRadius) {
@@ -558,10 +560,12 @@ connection.socket.on('bomb_event', (event) => {
     }
   } else if (event.kind === 'defused') {
     sound.bombDefused();
+    lastPlantedSite = null;
     hud.hideBombAlert();
     nextBombBeepAt = 0;
   } else if (event.kind === 'exploded') {
     sound.bombExplosion(dist);
+    lastPlantedSite = null;
     hud.hideBombAlert();
     effects.spawnExplosion(event.position, 0xff4d2e);
     if (dist < BOMB.explosionRadius * 1.4) {
@@ -1284,6 +1288,20 @@ function updateWorld(
   }
 
   bombView.update(frame.bomb, serverNow);
+  const isBombPlanted =
+    frame.bomb !== null &&
+    frame.bomb.state === 'planted' &&
+    frame.match.phase === 'live';
+
+  if (isBombPlanted) {
+    if (lastPlantedSite === null) {
+      lastPlantedSite = frame.bomb?.siteId ?? 'A';
+      hud.showBombPlanted(lastPlantedSite);
+    }
+  } else if (frame.match.phase !== 'live') {
+    lastPlantedSite = null;
+  }
+
   if (
     frame.bomb !== null &&
     frame.bomb.state === 'planted' &&

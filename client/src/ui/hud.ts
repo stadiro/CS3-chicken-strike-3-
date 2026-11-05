@@ -275,16 +275,16 @@ const HUD_TEMPLATE = `
   </div>
   <div class="bomb-alert" id="bomb-alert" aria-live="polite">
     <div class="bomb-alert__icon">
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="5" y="4" width="14" height="16" rx="2"></rect>
-        <line x1="9" y1="8" x2="15" y2="8"></line>
-        <line x1="9" y1="12" x2="15" y2="12"></line>
-        <line x1="9" y1="16" x2="11" y2="16"></line>
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="4" y="4" width="16" height="16" rx="3" fill="rgba(239, 68, 68, 0.3)"></rect>
+        <line x1="8" y1="8" x2="16" y2="8"></line>
+        <line x1="8" y1="12" x2="16" y2="12"></line>
+        <circle cx="12" cy="16" r="1.5" fill="#ef4444"></circle>
       </svg>
     </div>
     <div class="bomb-alert__text">
-      <span class="bomb-alert__title">БОМБА УСТАНОВЛЕНА</span>
-      <span class="bomb-alert__sub" id="bomb-alert-site">ТОЧКА A</span>
+      <span class="bomb-alert__title">БОМБА ЗАЛОЖЕНА</span>
+      <span class="bomb-alert__sub" id="bomb-alert-site">ТОЧКА A · ОБЕЗВРЕДЬТЕ БОМБУ</span>
     </div>
   </div>
   <div class="announcement" id="announcement"><span id="announcement-text"></span><small id="announcement-sub"></small></div>
@@ -2159,7 +2159,6 @@ export function createHud(callbacks: HudCallbacks): Hud {
 
   const hideRoundBanner = (): void => {
     roundBanner.classList.remove('is-visible', 'round-banner--win', 'round-banner--loss');
-    hideBombAlert();
   };
 
   const setBuyOpen = (show: boolean): void => {
@@ -2489,6 +2488,7 @@ export function createHud(callbacks: HudCallbacks): Hud {
     },
     showCountdown: (state) => {
       hideRoundBanner();
+      hideBombAlert();
       const text = state.seconds <= 1 ? 'БОЙ' : String(state.seconds);
       const subtitle = state.resumed
         ? 'ПРОДОЛЖЕНИЕ'
@@ -2499,6 +2499,7 @@ export function createHud(callbacks: HudCallbacks): Hud {
     },
     showLive: () => {
       hideRoundBanner();
+      hideBombAlert();
       showAnnouncement('БОЙ', 'УДАЧИ', 'live', 720);
     },
     addKill: (event, playerId) => {
@@ -2604,7 +2605,7 @@ export function createHud(callbacks: HudCallbacks): Hud {
         latestSnapshot?.players.find((candidate) => candidate.id === localPlayerId)?.side ?? null;
       setText(
         bombAlertSite,
-        localSide === 't' ? `ТОЧКА ${siteId} · ЗАЩИЩАЙТЕ БОМБУ` : `ТОЧКА ${siteId} · ОБЕЗВРЕДЬТЕ C4`,
+        localSide === 't' ? `ТОЧКА ${siteId} · ЗАЩИЩАЙТЕ БОМБУ` : `ТОЧКА ${siteId} · ОБЕЗВРЕДЬТЕ БОМБУ`,
       );
       bombAlert.classList.add('is-visible');
       if (bombAlertTimer !== undefined) {
@@ -2612,13 +2613,14 @@ export function createHud(callbacks: HudCallbacks): Hud {
       }
       bombAlertTimer = schedule(() => {
         bombAlert.classList.remove('is-visible');
-      }, 4500);
+      }, 5000);
     },
     hideBombAlert,
     showRoundWin: (winnerName, localWon, reason) => {
       if (disposed) {
         return;
       }
+      hideBombAlert();
       setText(
         roundBannerLabel,
         reason === 'bomb'
@@ -2645,6 +2647,7 @@ export function createHud(callbacks: HudCallbacks): Hud {
     hideRoundWin: hideRoundBanner,
     showResults: (event, playerId) => {
       hideRoundBanner();
+      hideBombAlert();
       setBuyOpen(false);
       showSettings(false);
       resultsEvent = event;
