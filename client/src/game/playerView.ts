@@ -25,9 +25,9 @@ const SIDE_COLORS = {
 } as const;
 
 // Hitbox matching constants:
-// Server head hitbox is a sphere of radius 0.21 centered at y = height - 0.21 (1.59 standing).
-// Server body hitbox is a cylinder of radius 0.32 from y = height * 0.46 (0.828) to 1.59.
-// Server leg hitbox is a cylinder of radius 0.27 from y = 0 to 0.828.
+// Server head hitbox is a sphere of radius 0.17 centered at y = height - 0.17 (1.63 standing).
+// Server body hitbox is a cylinder of radius 0.24 from y = height * 0.46 (0.828) to 1.63.
+// Server leg hitbox is a cylinder of radius 0.20 from y = 0 to 0.828.
 const CROUCH_SCALE = MOVEMENT.crouchHeight / MOVEMENT.standHeight;
 const UPPER_Y = 1.24;
 const HEAD_CENTER_Y = MOVEMENT.standHeight - PLAYER.headRadius;
@@ -106,13 +106,18 @@ function getAgentPalette(): AgentPalette {
   agentPaletteCache = {
     // CT (SAS)
     ctUniform: standard('ct-uniform', { color: 0x1d2c3f, roughness: 0.72, metalness: 0.08 }),
-    ctUniformDark: standard('ct-uniform-dark', { color: 0x131e2b, roughness: 0.8, metalness: 0.05 }),
+    ctUniformDark: standard('ct-uniform-dark', { color: 0x243242, roughness: 0.72, metalness: 0.06 }),
     ctVest: standard('ct-vest', { color: 0x151b24, roughness: 0.62, metalness: 0.18 }),
     ctWebbing: standard('ct-webbing', { color: 0x0f131a, roughness: 0.85, metalness: 0.1 }),
-    ctMaskRubber: standard('ct-mask-rubber', { color: 0x12161d, roughness: 0.5, metalness: 0.2 }),
-    ctMaskCanister: standard('ct-mask-canister', { color: 0x1f2732, roughness: 0.38, metalness: 0.45 }),
-    ctMaskLens: standard('ct-mask-lens', { color: 0x0a1622, roughness: 0.12, metalness: 0.85 }),
-    ctMaskLensRim: standard('ct-mask-lens-rim', { color: 0x222c3a, roughness: 0.4, metalness: 0.6 }),
+    ctMaskRubber: standard('ct-mask-rubber', { color: 0x242d3a, roughness: 0.55, metalness: 0.15 }),
+    ctMaskCanister: standard('ct-mask-canister', { color: 0x364354, roughness: 0.35, metalness: 0.5 }),
+    ctMaskLens: standard('ct-mask-lens', {
+      color: 0x38bdf8,
+      roughness: 0.08,
+      metalness: 0.8,
+      emissive: 0x0369a1,
+    }),
+    ctMaskLensRim: standard('ct-mask-lens-rim', { color: 0x94a3b8, roughness: 0.25, metalness: 0.85 }),
     ctGloves: standard('ct-gloves', { color: 0x141a22, roughness: 0.7, metalness: 0.15 }),
     ctBoots: standard('ct-boots', { color: 0x0b0e13, roughness: 0.78, metalness: 0.12 }),
     ctPads: standard('ct-pads', { color: 0x0c1015, roughness: 0.45, metalness: 0.25 }),
@@ -231,7 +236,7 @@ export class PlayerView {
 
     // Team Ring on ground
     const teamRing = new Mesh(
-      new RingGeometry(0.44, 0.56, 32),
+      new RingGeometry(0.36, 0.46, 32),
       new MeshBasicMaterial({
         color: 0x38bdf8,
         transparent: true,
@@ -290,36 +295,36 @@ export class PlayerView {
     // Conforms strictly to leg cylinder radius 0.27, height 0.0 - 0.70
     // -------------------------------------------------------------------------
 
-    this.legLeft.position.set(-0.13, 0.70, 0);
-    this.legRight.position.set(0.13, 0.70, 0);
+    this.legLeft.position.set(-0.11, 0.70, 0);
+    this.legRight.position.set(0.11, 0.70, 0);
     this.root.add(this.legLeft, this.legRight);
 
     // Build legs for CT and T
     for (const [legGroup, isLeft] of [[this.legLeft, true], [this.legRight, false]] as const) {
       // CT Leg
       const ctLeg = new Group();
-      addBox(ctLeg, [0.18, 0.38, 0.20], [0, -0.20, 0], p.ctUniform);
-      addBox(ctLeg, [0.17, 0.30, 0.19], [0, -0.48, 0], p.ctUniform);
-      addBox(ctLeg, [0.13, 0.11, 0.04], [0, -0.32, -0.115], p.ctPads);
+      addBox(ctLeg, [0.16, 0.38, 0.18], [0, -0.20, 0], p.ctUniform);
+      addBox(ctLeg, [0.15, 0.30, 0.17], [0, -0.48, 0], p.ctUniform);
+      addBox(ctLeg, [0.12, 0.10, 0.04], [0, -0.32, -0.105], p.ctPads);
       // Assault boot
-      addBox(ctLeg, [0.16, 0.16, 0.18], [0, -0.60, 0.01], p.ctBoots);
-      addBox(ctLeg, [0.15, 0.10, 0.22], [0, -0.65, -0.04], p.ctBoots);
-      addBox(ctLeg, [0.16, 0.03, 0.24], [0, -0.69, -0.03], p.ctBoots);
+      addBox(ctLeg, [0.15, 0.16, 0.17], [0, -0.60, 0.01], p.ctBoots);
+      addBox(ctLeg, [0.14, 0.10, 0.20], [0, -0.65, -0.03], p.ctBoots);
+      addBox(ctLeg, [0.15, 0.03, 0.21], [0, -0.69, -0.02], p.ctBoots);
       legGroup.add(ctLeg);
       this.ctNodes.push(ctLeg);
 
       // T Leg
       const tLeg = new Group();
-      addBox(tLeg, [0.18, 0.38, 0.20], [0, -0.20, 0], p.tPants);
-      addBox(tLeg, [0.17, 0.30, 0.19], [0, -0.48, 0], p.tPants);
+      addBox(tLeg, [0.16, 0.38, 0.18], [0, -0.20, 0], p.tPants);
+      addBox(tLeg, [0.15, 0.30, 0.17], [0, -0.48, 0], p.tPants);
       // Cargo pocket on outer side
-      const pocketX = isLeft ? -0.10 : 0.10;
-      addBox(tLeg, [0.04, 0.13, 0.12], [pocketX, -0.22, 0], p.tPants);
-      addBox(tLeg, [0.13, 0.11, 0.04], [0, -0.32, -0.115], p.tPads);
+      const pocketX = isLeft ? -0.09 : 0.09;
+      addBox(tLeg, [0.035, 0.13, 0.11], [pocketX, -0.22, 0], p.tPants);
+      addBox(tLeg, [0.12, 0.10, 0.04], [0, -0.32, -0.105], p.tPads);
       // Combat boot
-      addBox(tLeg, [0.16, 0.16, 0.18], [0, -0.60, 0.01], p.tBoots);
-      addBox(tLeg, [0.15, 0.10, 0.22], [0, -0.65, -0.04], p.tBoots);
-      addBox(tLeg, [0.16, 0.03, 0.24], [0, -0.69, -0.03], p.tBoots);
+      addBox(tLeg, [0.15, 0.16, 0.17], [0, -0.60, 0.01], p.tBoots);
+      addBox(tLeg, [0.14, 0.10, 0.20], [0, -0.65, -0.03], p.tBoots);
+      addBox(tLeg, [0.15, 0.03, 0.21], [0, -0.69, -0.02], p.tBoots);
       legGroup.add(tLeg);
       this.tNodes.push(tLeg);
     }
@@ -341,19 +346,19 @@ export class PlayerView {
     addCylinder(ctUpper, 0.005, 0.005, 0.12, [-0.18, 0.24, -0.14], p.ctWebbing);
     addCylinder(ctUpper, 0.11, 0.13, 0.12, [0, 0.20, 0], p.ctUniformDark);
 
-    // SAS Head (sphere radius 0.20 at HEAD_OFFSET_Y = 0.35, matching server head radius 0.21)
-    addSphere(ctUpper, 0.20, [0, HEAD_OFFSET_Y, 0], p.ctUniformDark, 18, 14);
-    addSphere(ctUpper, 0.185, [0, HEAD_OFFSET_Y - 0.02, -0.04], p.ctMaskRubber, 16, 12);
-    // Left eye lens & metallic bezel
-    addCylinder(ctUpper, 0.042, 0.042, 0.025, [-0.062, HEAD_OFFSET_Y + 0.025, -0.17], p.ctMaskLensRim, [Math.PI / 2, 0, 0]);
-    addCylinder(ctUpper, 0.036, 0.036, 0.026, [-0.062, HEAD_OFFSET_Y + 0.025, -0.172], p.ctMaskLens, [Math.PI / 2, 0, 0]);
+    // SAS Head (sphere radius 0.17 at HEAD_OFFSET_Y = 0.39, matching server head radius 0.17)
+    addSphere(ctUpper, 0.17, [0, HEAD_OFFSET_Y, 0], p.ctUniformDark, 18, 14);
+    addSphere(ctUpper, 0.155, [0, HEAD_OFFSET_Y - 0.015, -0.03], p.ctMaskRubber, 16, 12);
+    // Left eye lens & metallic bezel (bright polished rim with glossy cyan-tinted glass)
+    addCylinder(ctUpper, 0.038, 0.038, 0.024, [-0.052, HEAD_OFFSET_Y + 0.02, -0.144], p.ctMaskLensRim, [Math.PI / 2, 0, 0]);
+    addCylinder(ctUpper, 0.032, 0.032, 0.025, [-0.052, HEAD_OFFSET_Y + 0.02, -0.146], p.ctMaskLens, [Math.PI / 2, 0, 0]);
     // Right eye lens & metallic bezel
-    addCylinder(ctUpper, 0.042, 0.042, 0.025, [0.062, HEAD_OFFSET_Y + 0.025, -0.17], p.ctMaskLensRim, [Math.PI / 2, 0, 0]);
-    addCylinder(ctUpper, 0.036, 0.036, 0.026, [0.062, HEAD_OFFSET_Y + 0.025, -0.172], p.ctMaskLens, [Math.PI / 2, 0, 0]);
+    addCylinder(ctUpper, 0.038, 0.038, 0.024, [0.052, HEAD_OFFSET_Y + 0.02, -0.144], p.ctMaskLensRim, [Math.PI / 2, 0, 0]);
+    addCylinder(ctUpper, 0.032, 0.032, 0.025, [0.052, HEAD_OFFSET_Y + 0.02, -0.146], p.ctMaskLens, [Math.PI / 2, 0, 0]);
     // Voice emitter / front speech diaphragm
-    addCylinder(ctUpper, 0.038, 0.038, 0.035, [0, HEAD_OFFSET_Y - 0.065, -0.175], p.ctMaskCanister, [Math.PI / 2, 0, 0]);
+    addCylinder(ctUpper, 0.032, 0.032, 0.035, [0, HEAD_OFFSET_Y - 0.055, -0.148], p.ctMaskCanister, [Math.PI / 2, 0, 0]);
     // S10 respirator filter canister (left cheek)
-    addCylinder(ctUpper, 0.042, 0.044, 0.055, [-0.095, HEAD_OFFSET_Y - 0.065, -0.145], p.ctMaskCanister, [Math.PI / 2 - 0.2, -0.3, 0]);
+    addCylinder(ctUpper, 0.036, 0.038, 0.050, [-0.080, HEAD_OFFSET_Y - 0.055, -0.125], p.ctMaskCanister, [Math.PI / 2 - 0.2, -0.3, 0]);
     this.upper.add(ctUpper);
     this.ctNodes.push(ctUpper);
 
@@ -364,13 +369,13 @@ export class PlayerView {
     addBox(tUpper, [0.08, 0.06, 0.28], [-0.15, 0.18, 0], p.tHarness);
     addBox(tUpper, [0.08, 0.06, 0.28], [0.15, 0.18, 0], p.tHarness);
 
-    // Phoenix Balaclava Head (radius 0.20 at HEAD_OFFSET_Y = 0.35)
-    addSphere(tUpper, 0.20, [0, HEAD_OFFSET_Y, 0], p.tBalaclava, 18, 14);
-    addBox(tUpper, [0.02, 0.22, 0.22], [0, HEAD_OFFSET_Y + 0.10, 0.02], p.tBalaclavaSeam);
-    addCylinder(tUpper, 0.125, 0.14, 0.10, [0, 0.22, 0], p.tBalaclava);
+    // Phoenix Balaclava Head (radius 0.17 at HEAD_OFFSET_Y = 0.39)
+    addSphere(tUpper, 0.17, [0, HEAD_OFFSET_Y, 0], p.tBalaclava, 18, 14);
+    addBox(tUpper, [0.02, 0.18, 0.18], [0, HEAD_OFFSET_Y + 0.08, 0.02], p.tBalaclavaSeam);
+    addCylinder(tUpper, 0.11, 0.13, 0.10, [0, 0.23, 0], p.tBalaclava);
     // Eye slit opening & inner face tone
-    addBox(tUpper, [0.17, 0.055, 0.04], [0, HEAD_OFFSET_Y + 0.025, -0.18], p.tBalaclavaCutout);
-    addBox(tUpper, [0.14, 0.028, 0.02], [0, HEAD_OFFSET_Y + 0.025, -0.185], p.tFaceSkin);
+    addBox(tUpper, [0.15, 0.050, 0.035], [0, HEAD_OFFSET_Y + 0.02, -0.152], p.tBalaclavaCutout);
+    addBox(tUpper, [0.12, 0.024, 0.020], [0, HEAD_OFFSET_Y + 0.02, -0.157], p.tFaceSkin);
     this.upper.add(tUpper);
     this.tNodes.push(tUpper);
 

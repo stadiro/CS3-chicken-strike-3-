@@ -58,11 +58,11 @@ export const PLAYER = {
   headshotMultiplier: 4,
   legMultiplier: 0.7,
   /** Radius of the spherical head hitbox. Matches the visible head. */
-  headRadius: 0.21,
+  headRadius: 0.17,
   /** Radius of the torso cylinder hitbox. Matches the visible torso. */
-  bodyRadius: 0.32,
+  bodyRadius: 0.24,
   /** Radius of the leg cylinder hitbox. Matches the visible legs. */
-  legRadius: 0.27,
+  legRadius: 0.20,
   /** Legs occupy this fraction of the player's current height. */
   legHeightRatio: 0.46,
 } as const;

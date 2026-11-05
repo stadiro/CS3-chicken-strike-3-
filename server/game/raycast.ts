@@ -307,7 +307,7 @@ export function raycastPlayers(
     const legTop = sampled.position.y + sampled.height * PLAYER_CONFIG.legHeightRatio;
     // Overlap the bottom of the head sphere so the neck/shoulder area cannot
     // fall into a gap between the two hitboxes.
-    const torsoTop = headCenterY;
+    const torsoTop = headCenterY - PLAYER_CONFIG.headRadius * 0.25;
     const bodyHit = rayVerticalCylinder(
       origin,
       direction,

@@ -83,18 +83,18 @@ describe('ray casting', () => {
     const headEdge = raycastPlayers(
       players,
       shooter,
-      vec3(0.12, 1.65, 0),
+      vec3(0.1, 1.65, 0),
       vec3(0, 0, 1),
       20,
       1_000,
     );
-    const bodyEdge = raycastPlayers(players, shooter, vec3(0.3, 1.0, 0), vec3(0, 0, 1), 20, 1_000);
-    const legEdge = raycastPlayers(players, shooter, vec3(0.25, 0.3, 0), vec3(0, 0, 1), 20, 1_000);
-    const neck = raycastPlayers(players, shooter, vec3(0.25, 1.55, 0), vec3(0, 0, 1), 20, 1_000);
+    const bodyEdge = raycastPlayers(players, shooter, vec3(0.23, 1.0, 0), vec3(0, 0, 1), 20, 1_000);
+    const legEdge = raycastPlayers(players, shooter, vec3(0.18, 0.3, 0), vec3(0, 0, 1), 20, 1_000);
+    const neck = raycastPlayers(players, shooter, vec3(0.18, 1.55, 0), vec3(0, 0, 1), 20, 1_000);
     const headCornerMiss = raycastPlayers(
       players,
       shooter,
-      vec3(0.3, 1.65, 0),
+      vec3(0.24, 1.65, 0),
       vec3(0, 0, 1),
       20,
       1_000,
@@ -102,7 +102,7 @@ describe('ray casting', () => {
     const legCornerMiss = raycastPlayers(
       players,
       shooter,
-      vec3(0.3, 0.3, 0),
+      vec3(0.24, 0.3, 0),
       vec3(0, 0, 1),
       20,
       1_000,
