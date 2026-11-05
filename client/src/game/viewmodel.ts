@@ -23,6 +23,27 @@ const VIEWMODEL_BASE_X = 0.28;
 const VIEWMODEL_BASE_Y = -0.24;
 const VIEWMODEL_BASE_Z = -0.78;
 
+const GUN_LEFT_HAND_POS: [number, number, number] = [-0.08, -0.12, -0.14];
+const GUN_LEFT_HAND_ROT: [number, number, number] = [-0.2, 0.1, -0.2];
+const GUN_LEFT_SLEEVE_POS: [number, number, number] = [-0.15, -0.22, 0.06];
+const GUN_LEFT_SLEEVE_ROT: [number, number, number] = [-0.2, 0.1, -0.2];
+
+const GUN_RIGHT_HAND_POS: [number, number, number] = [0.1, -0.17, 0.03];
+const GUN_RIGHT_HAND_ROT: [number, number, number] = [0.16, -0.12, 0.14];
+const GUN_RIGHT_SLEEVE_POS: [number, number, number] = [0.2, -0.28, 0.2];
+const GUN_RIGHT_SLEEVE_ROT: [number, number, number] = [0.16, -0.12, 0.14];
+
+// CS2 knife rest pose (held diagonally across screen):
+const KNIFE_BASE_POS: [number, number, number] = [-0.05, 0.03, 0.06];
+const KNIFE_BASE_ROT: [number, number, number] = [-0.22, -0.52, 0.44];
+
+const KNIFE_RIGHT_HAND_POS: [number, number, number] = [0.03, -0.14, 0.12];
+const KNIFE_RIGHT_HAND_ROT: [number, number, number] = [-0.18, -0.42, 0.38];
+const KNIFE_RIGHT_SLEEVE_POS: [number, number, number] = [0.13, -0.24, 0.26];
+const KNIFE_RIGHT_SLEEVE_ROT: [number, number, number] = [-0.18, -0.42, 0.38];
+
+const KNIFE_SLASH_DURATION = 0.3;
+
 export interface ViewmodelState {
   now: number;
   moving: boolean;
@@ -40,6 +61,11 @@ export class Viewmodel {
   private readonly flashGroup = new Group();
   private readonly flashLight: PointLight;
   private readonly flashMesh: Mesh<SphereGeometry, MeshBasicMaterial>;
+  private readonly leftHand: Mesh;
+  private readonly rightHand: Mesh;
+  private readonly leftSleeve: Mesh;
+  private readonly rightSleeve: Mesh;
+
   private weapon: WeaponModel | null = null;
   private weaponId: WeaponId | null = null;
   private recoil = 0;
@@ -48,6 +74,8 @@ export class Viewmodel {
   private magazineBase: Vector3 | null = null;
   private slideBase: Vector3 | null = null;
   private boltBase: Vector3 | null = null;
+  private knifeSlashTime = 0;
+  private knifeSlashSide = 0;
   private visible = true;
   private disposed = false;
 
@@ -78,25 +106,25 @@ export class Viewmodel {
       metalness: 0.1,
     });
 
-    const leftHand = new Mesh(new BoxGeometry(0.12, 0.14, 0.22), glove);
-    leftHand.position.set(-0.08, -0.12, -0.14);
-    leftHand.rotation.set(-0.2, 0.1, -0.2);
-    this.root.add(leftHand);
+    this.leftHand = new Mesh(new BoxGeometry(0.12, 0.14, 0.22), glove);
+    this.leftHand.position.set(...GUN_LEFT_HAND_POS);
+    this.leftHand.rotation.set(...GUN_LEFT_HAND_ROT);
+    this.root.add(this.leftHand);
 
-    const rightHand = new Mesh(new BoxGeometry(0.13, 0.15, 0.23), glove);
-    rightHand.position.set(0.1, -0.17, 0.03);
-    rightHand.rotation.set(0.16, -0.12, 0.14);
-    this.root.add(rightHand);
+    this.rightHand = new Mesh(new BoxGeometry(0.13, 0.15, 0.23), glove);
+    this.rightHand.position.set(...GUN_RIGHT_HAND_POS);
+    this.rightHand.rotation.set(...GUN_RIGHT_HAND_ROT);
+    this.root.add(this.rightHand);
 
-    const leftSleeve = new Mesh(new BoxGeometry(0.16, 0.2, 0.3), sleeve);
-    leftSleeve.position.set(-0.15, -0.22, 0.06);
-    leftSleeve.rotation.set(-0.2, 0.1, -0.2);
-    this.root.add(leftSleeve);
+    this.leftSleeve = new Mesh(new BoxGeometry(0.16, 0.2, 0.3), sleeve);
+    this.leftSleeve.position.set(...GUN_LEFT_SLEEVE_POS);
+    this.leftSleeve.rotation.set(...GUN_LEFT_SLEEVE_ROT);
+    this.root.add(this.leftSleeve);
 
-    const rightSleeve = new Mesh(new BoxGeometry(0.17, 0.2, 0.3), sleeve);
-    rightSleeve.position.set(0.2, -0.28, 0.2);
-    rightSleeve.rotation.set(0.16, -0.12, 0.14);
-    this.root.add(rightSleeve);
+    this.rightSleeve = new Mesh(new BoxGeometry(0.17, 0.2, 0.3), sleeve);
+    this.rightSleeve.position.set(...GUN_RIGHT_SLEEVE_POS);
+    this.rightSleeve.rotation.set(...GUN_RIGHT_SLEEVE_ROT);
+    this.root.add(this.rightSleeve);
 
     this.flashLight = new PointLight(0xffcf66, 0, 3.5, 2);
     this.flashLight.position.set(0, 0.02, -0.45);
@@ -126,7 +154,6 @@ export class Viewmodel {
 
     this.weapon?.dispose();
     this.weapon = createWeaponModel(weaponId, 1);
-    this.weapon.group.position.set(0, 0, 0);
     this.root.add(this.weapon.group);
     this.flashGroup.position.copy(this.weapon.muzzle.position);
     this.flashLight.position.copy(this.weapon.muzzle.position);
@@ -135,12 +162,50 @@ export class Viewmodel {
     this.boltBase = this.weapon.bolt?.position.clone() ?? null;
     this.weaponId = weaponId;
     this.switchOffset = 0.3;
+    this.knifeSlashTime = 0;
+
+    const isKnife = weaponId === 'knife';
+    this.leftHand.visible = !isKnife;
+    this.leftSleeve.visible = !isKnife;
+
+    if (isKnife) {
+      this.weapon.group.position.set(...KNIFE_BASE_POS);
+      this.weapon.group.rotation.set(...KNIFE_BASE_ROT);
+      this.rightHand.position.set(...KNIFE_RIGHT_HAND_POS);
+      this.rightHand.rotation.set(...KNIFE_RIGHT_HAND_ROT);
+      this.rightSleeve.position.set(...KNIFE_RIGHT_SLEEVE_POS);
+      this.rightSleeve.rotation.set(...KNIFE_RIGHT_SLEEVE_ROT);
+    } else {
+      this.weapon.group.position.set(0, 0, 0);
+      this.weapon.group.rotation.set(0, 0, 0);
+      this.leftHand.position.set(...GUN_LEFT_HAND_POS);
+      this.leftHand.rotation.set(...GUN_LEFT_HAND_ROT);
+      this.leftSleeve.position.set(...GUN_LEFT_SLEEVE_POS);
+      this.leftSleeve.rotation.set(...GUN_LEFT_SLEEVE_ROT);
+      this.rightHand.position.set(...GUN_RIGHT_HAND_POS);
+      this.rightHand.rotation.set(...GUN_RIGHT_HAND_ROT);
+      this.rightSleeve.position.set(...GUN_RIGHT_SLEEVE_POS);
+      this.rightSleeve.rotation.set(...GUN_RIGHT_SLEEVE_ROT);
+    }
   }
 
   triggerFire(): void {
+    if (this.weaponId === 'knife') {
+      this.triggerKnifeSlash();
+      return;
+    }
     this.recoil = Math.min(0.18, this.recoil + 0.055);
     this.flashTime = 0.05;
     this.flashMesh.rotation.z = Math.random() * Math.PI;
+  }
+
+  triggerKnifeSlash(): void {
+    this.knifeSlashTime = KNIFE_SLASH_DURATION;
+    this.knifeSlashSide = (this.knifeSlashSide + 1) % 2;
+    this.flashTime = 0;
+    this.flashMesh.visible = false;
+    this.flashLight.intensity = 0;
+    this.recoil = 0;
   }
 
   setVisible(visible: boolean): void {
@@ -158,7 +223,8 @@ export class Viewmodel {
       return;
     }
 
-    this.recoil = Math.max(0, this.recoil - dt * 0.9);
+    const isKnife = this.weaponId === 'knife';
+    this.recoil = isKnife ? 0 : Math.max(0, this.recoil - dt * 0.9);
     this.switchOffset = Math.max(0, this.switchOffset - dt * 1.3);
 
     const bobStrength = state.moving ? 0.012 : 0.0035;
@@ -167,12 +233,22 @@ export class Viewmodel {
     const bobY = Math.cos(state.now * bobSpeed * 2) * bobStrength * 0.65;
     const crouchOffset = state.crouching ? 0.035 : 0;
     const reloadArc = state.reloading ? Math.sin(state.reloadProgress * Math.PI) : 0;
-    this.animateReloadParts(state.reloading ? state.reloadProgress : 0);
+
+    if (isKnife) {
+      this.animateKnifeSlash(dt);
+    } else {
+      this.animateReloadParts(state.reloading ? state.reloadProgress : 0);
+    }
+
+    const slashThrust =
+      isKnife && this.knifeSlashTime > 0
+        ? Math.sin((1 - this.knifeSlashTime / KNIFE_SLASH_DURATION) * Math.PI) * 0.035
+        : 0;
 
     this.root.position.set(
       VIEWMODEL_BASE_X + bobX + reloadArc * 0.035,
       VIEWMODEL_BASE_Y + bobY - crouchOffset - reloadArc * 0.2 - this.switchOffset,
-      VIEWMODEL_BASE_Z + this.recoil * 0.55,
+      VIEWMODEL_BASE_Z + this.recoil * 0.55 - slashThrust,
     );
     this.root.rotation.set(
       this.recoil * 1.8 - reloadArc * 0.38,
@@ -180,14 +256,116 @@ export class Viewmodel {
       reloadArc * 0.55 + this.recoil * 0.35,
     );
 
-    this.flashTime = Math.max(0, this.flashTime - dt);
-    const flashVisible = this.flashTime > 0;
+    this.flashTime = isKnife ? 0 : Math.max(0, this.flashTime - dt);
+    const flashVisible = !isKnife && this.flashTime > 0;
     this.flashMesh.visible = flashVisible;
     this.flashLight.intensity = flashVisible ? 18 : 0;
     if (flashVisible) {
       const scale = 0.7 + Math.random() * 0.9;
       this.flashMesh.scale.setScalar(scale);
     }
+  }
+
+  private animateKnifeSlash(dt: number): void {
+    if (this.weapon === null) {
+      return;
+    }
+
+    let dx = 0;
+    let dy = 0;
+    let dz = 0;
+    let rx = 0;
+    let ry = 0;
+    let rz = 0;
+
+    if (this.knifeSlashTime > 0) {
+      this.knifeSlashTime = Math.max(0, this.knifeSlashTime - dt);
+      const progress = 1 - this.knifeSlashTime / KNIFE_SLASH_DURATION; // 0 to 1
+
+      if (progress < 0.15) {
+        // Anticipation (windup): slight pull back & rotation preparation
+        const p = progress / 0.15;
+        const dir = this.knifeSlashSide === 0 ? 1 : -1;
+        dx = 0.03 * p * dir;
+        dy = 0.02 * p;
+        dz = 0.04 * p;
+        rx = -0.1 * p;
+        ry = 0.12 * p * dir;
+        rz = -0.1 * p * dir;
+      } else if (progress < 0.6) {
+        // The slash swing arc (fast whip across screen)
+        const p = (progress - 0.15) / 0.45; // 0 to 1
+        const arc = Math.sin(p * Math.PI);
+        if (this.knifeSlashSide === 0) {
+          // Slash A: right-to-left downward cutting slash
+          dx = -0.22 * arc;
+          dy = -0.11 * arc;
+          dz = -0.16 * arc;
+          rx = 0.42 * arc;
+          ry = -0.65 * arc;
+          rz = 0.75 * arc;
+        } else {
+          // Slash B: left-to-right upward cutting slash
+          dx = 0.18 * arc;
+          dy = 0.09 * arc;
+          dz = -0.14 * arc;
+          rx = -0.32 * arc;
+          ry = 0.55 * arc;
+          rz = -0.65 * arc;
+        }
+      } else {
+        // Recovery: smooth ease back to resting CS2 diagonal
+        const p = (progress - 0.6) / 0.4;
+        const decay = Math.pow(1 - p, 2);
+        if (this.knifeSlashSide === 0) {
+          dx = -0.04 * decay;
+          dy = -0.02 * decay;
+          dz = -0.03 * decay;
+          rx = 0.08 * decay;
+          ry = -0.12 * decay;
+          rz = 0.14 * decay;
+        } else {
+          dx = 0.03 * decay;
+          dy = 0.02 * decay;
+          dz = -0.03 * decay;
+          rx = -0.06 * decay;
+          ry = 0.1 * decay;
+          rz = -0.12 * decay;
+        }
+      }
+    }
+
+    this.weapon.group.position.set(
+      KNIFE_BASE_POS[0] + dx,
+      KNIFE_BASE_POS[1] + dy,
+      KNIFE_BASE_POS[2] + dz,
+    );
+    this.weapon.group.rotation.set(
+      KNIFE_BASE_ROT[0] + rx,
+      KNIFE_BASE_ROT[1] + ry,
+      KNIFE_BASE_ROT[2] + rz,
+    );
+
+    this.rightHand.position.set(
+      KNIFE_RIGHT_HAND_POS[0] + dx * 0.9,
+      KNIFE_RIGHT_HAND_POS[1] + dy * 0.9,
+      KNIFE_RIGHT_HAND_POS[2] + dz * 0.9,
+    );
+    this.rightHand.rotation.set(
+      KNIFE_RIGHT_HAND_ROT[0] + rx * 0.75,
+      KNIFE_RIGHT_HAND_ROT[1] + ry * 0.75,
+      KNIFE_RIGHT_HAND_ROT[2] + rz * 0.75,
+    );
+    this.rightSleeve.position.set(
+      KNIFE_RIGHT_SLEEVE_POS[0] + dx * 0.75,
+      KNIFE_RIGHT_SLEEVE_POS[1] + dy * 0.75,
+      KNIFE_RIGHT_SLEEVE_POS[2] + dz * 0.75,
+    );
+    this.rightSleeve.rotation.set(
+      KNIFE_RIGHT_SLEEVE_ROT[0] + rx * 0.6,
+      KNIFE_RIGHT_SLEEVE_ROT[1] + ry * 0.6,
+      KNIFE_RIGHT_SLEEVE_ROT[2] + rz * 0.6,
+    );
   }
 
   private animateReloadParts(progress: number): void {

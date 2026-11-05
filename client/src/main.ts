@@ -436,10 +436,16 @@ connection.socket.on('shot', (event) => {
         );
   sound.shot(event.weapon, shotDistance);
   if (spectatedShot) {
-    viewmodel.triggerFire();
-    cameraShake = Math.min(0.07, cameraShake + getWeapon(event.weapon).recoil * 0.25);
+    if (event.weapon === 'knife') {
+      viewmodel.triggerKnifeSlash();
+    } else {
+      viewmodel.triggerFire();
+      cameraShake = Math.min(0.07, cameraShake + getWeapon(event.weapon).recoil * 0.25);
+    }
   } else if (!localShot) {
-    effects.spawnMuzzle(event.from, 0xffcf66);
+    if (event.weapon !== 'knife') {
+      effects.spawnMuzzle(event.from, 0xffcf66);
+    }
     const cameraPosition = {
       x: arena.camera.position.x,
       y: arena.camera.position.y,
@@ -447,7 +453,7 @@ connection.socket.on('shot', (event) => {
     } satisfies Vec3;
     const closest = closestPointOnSegment(cameraPosition, event.from, event.to);
     const missDistance = distance(cameraPosition, closest);
-    if (missDistance < 9) {
+    if (missDistance < 9 && event.weapon !== 'knife') {
       sound.whiz(missDistance, panForPoint(closest));
     }
     if (event.weapon !== 'knife') {
@@ -458,11 +464,15 @@ connection.socket.on('shot', (event) => {
       }
     }
   } else {
-    viewmodel.triggerFire();
-    applyRecoil(event.weapon);
-    if (isScopedWeapon(event.weapon)) {
-      scopeRecoverUntil = performance.now() + AWP_SCOPE_RECOVER_MS;
-      setScoped(false);
+    if (event.weapon === 'knife') {
+      viewmodel.triggerKnifeSlash();
+    } else {
+      viewmodel.triggerFire();
+      applyRecoil(event.weapon);
+      if (isScopedWeapon(event.weapon)) {
+        scopeRecoverUntil = performance.now() + AWP_SCOPE_RECOVER_MS;
+        setScoped(false);
+      }
     }
   }
   // A knife swing that misses reports the end of its short range, not a wall

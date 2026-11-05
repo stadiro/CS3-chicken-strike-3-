@@ -47,6 +47,11 @@ export class SoundSystem {
       return;
     }
 
+    if (weapon === 'knife') {
+      this.knifeSwing(distance);
+      return;
+    }
+
     const closeness = 1 / (1 + Math.max(0, distance) * 0.035);
     const isHeavy =
       weapon === 'awp' || weapon === 'ak47' || weapon === 'deagle' || weapon === 'm249';
@@ -59,9 +64,16 @@ export class SoundSystem {
       'sawtooth',
       weapon === 'awp' ? 42 : 70,
     );
-    if (weapon === 'knife') {
-      this.noise(0.05, 2200, 0.12, 'bandpass');
+  }
+
+  knifeSwing(distance = 0): void {
+    const audio = this.ensure();
+    if (audio === null) {
+      return;
     }
+    const closeness = 1 / (1 + Math.max(0, distance) * 0.04);
+    this.noise(0.09, 1800, 0.24 * closeness, 'bandpass');
+    this.tone(360, 0.08, 0.05 * closeness, 'sine', 160);
   }
 
   hit(headshot: boolean): void {
